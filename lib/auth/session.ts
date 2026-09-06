@@ -1,14 +1,17 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { users } from '@/lib/db/schema';
 import type { Role, Segment } from '@/lib/db/schema';
 
 export const SESSION_COOKIE = 'sd_session';
 const MAX_AGE_SECONDS = 60 * 60 * 8; // 8 horas — um turno escolar com folga.
 
 /**
- * Tudo que a aplicação precisa saber sobre quem está falando, sem ida ao banco.
- * É este objeto que define, ao mesmo tempo, o recorte de acesso aos documentos
- * e o contexto que vai no prompt do assistente.
+ * Tudo que a aplicação precisa saber sobre quem está falando: define ao mesmo
+ * tempo o recorte de acesso aos documentos e o contexto que vai no prompt.
  */
 export interface SessionUser {
   id: string;
@@ -21,6 +24,9 @@ export interface SessionUser {
   serie: string | null;
   turma: string | null;
   extraSeries: string[];
+  disciplinas: string[];
+  segmentsTaught: Segment[];
+  contextNote: string | null;
 }
 
 function secretKey(): Uint8Array {
@@ -33,25 +39,21 @@ function secretKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-export async function createSessionToken(user: SessionUser): Promise<string> {
-  return new SignJWT({ user: user as unknown as Record<string, unknown> })
+/**
+ * O cookie carrega apenas o id.
+ *
+ * Papel, série e situação ficam no banco e são lidos a cada requisição. Custa
+ * uma consulta por chave primária, e em troca desativar alguém ou corrigir a
+ * série de um aluno passa a valer na hora — em vez de continuar valendo o que
+ * estava no token por até 8 horas.
+ */
+export async function setSessionCookie(userId: string): Promise<void> {
+  const token = await new SignJWT({ uid: userId })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${MAX_AGE_SECONDS}s`)
     .sign(secretKey());
-}
 
-export async function readSessionToken(token: string): Promise<SessionUser | null> {
-  try {
-    const { payload } = await jwtVerify(token, secretKey());
-    return (payload.user as SessionUser) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export async function setSessionCookie(user: SessionUser): Promise<void> {
-  const token = await createSessionToken(user);
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -67,15 +69,47 @@ export async function clearSessionCookie(): Promise<void> {
   store.delete(SESSION_COOKIE);
 }
 
-/** Sessão atual, ou null. Use em páginas que tratam o caso anônimo. */
-export async function getSession(): Promise<SessionUser | null> {
+/**
+ * Sessão atual, ou null.
+ *
+ * `cache()` deduplica a consulta dentro da mesma requisição: layout, página e
+ * rota podem chamar à vontade que o banco é consultado uma vez só.
+ */
+export const getSession = cache(async (): Promise<SessionUser | null> => {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  return readSessionToken(token);
-}
 
-/** Sessão atual, lançando quando não há — para rotas já protegidas por middleware. */
+  let userId: string;
+  try {
+    const { payload } = await jwtVerify(token, secretKey());
+    userId = String(payload.uid ?? '');
+    if (!userId) return null;
+  } catch {
+    return null;
+  }
+
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user || !user.active) return null;
+
+  return {
+    id: user.id,
+    tenantId: user.tenantId,
+    name: user.name,
+    email: user.email,
+    matricula: user.matricula,
+    role: user.role,
+    segment: user.segment,
+    serie: user.serie,
+    turma: user.turma,
+    extraSeries: user.extraSeries,
+    disciplinas: user.disciplinas,
+    segmentsTaught: user.segmentsTaught,
+    contextNote: user.contextNote,
+  };
+});
+
+/** Sessão atual, lançando quando não há — para rotas já protegidas pelo proxy. */
 export async function requireSession(): Promise<SessionUser> {
   const session = await getSession();
   if (!session) throw new Error('UNAUTHENTICATED');

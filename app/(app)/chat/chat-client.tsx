@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnswerText } from '@/components/answer-text';
-import { AlertIcon, ArrowUpIcon, ArrowUpRightIcon, FileIcon, SparkleIcon } from '@/components/icons';
+import {
+  AlertIcon,
+  ArrowUpIcon,
+  ArrowUpRightIcon,
+  FileIcon,
+  SparkleIcon,
+  ThumbDownIcon,
+  ThumbUpIcon,
+} from '@/components/icons';
 import { DOCUMENT_TYPE_LABELS, ROLE_LABELS, serieLabel } from '@/lib/taxonomy';
 import type { SessionUser } from '@/lib/auth/session';
 import type { DocumentTypeValue } from '@/lib/db/schema';
@@ -24,6 +32,11 @@ interface ChatMessage {
   /** Verdadeiro entre o envio e o primeiro token da resposta. */
   pending?: boolean;
   error?: string;
+  /** Id no banco, necessário para registrar o feedback. */
+  messageId?: string;
+  feedback?: 'util' | 'nao_util';
+  /** Respostas prováveis quando o assistente pediu esclarecimento. */
+  clarifyOptions?: string[];
 }
 
 export function ChatClient({
@@ -102,8 +115,14 @@ export function ChatClient({
             } else if (event.type === 'delta') {
               answer += event.text;
               patch({ content: answer, pending: false });
+            } else if (event.type === 'clarify') {
+              patch({ clarifyOptions: event.options ?? [] });
             } else if (event.type === 'done') {
-              patch({ citations: event.citations, pending: false });
+              patch({
+                citations: event.citations,
+                messageId: event.messageId,
+                pending: false,
+              });
             } else if (event.type === 'error') {
               patch({ error: event.message, pending: false });
             }
@@ -127,6 +146,28 @@ export function ChatClient({
     setConversationId(null);
     setInput('');
     textareaRef.current?.focus();
+  };
+
+  const sendFeedback = async (item: ChatMessage, feedback: 'util' | 'nao_util') => {
+    if (!item.messageId) return;
+
+    // Otimista: o sinal é secundário, e travar a interface esperando a rede
+    // atrapalharia mais do que ajudaria.
+    setItems((prev) =>
+      prev.map((m) => (m.id === item.id ? { ...m, feedback } : m)),
+    );
+
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: item.messageId, feedback }),
+      });
+    } catch {
+      setItems((prev) =>
+        prev.map((m) => (m.id === item.id ? { ...m, feedback: undefined } : m)),
+      );
+    }
   };
 
   const focusCitation = (messageId: string, index: number) => {
@@ -206,7 +247,7 @@ export function ChatClient({
                   </div>
                 ) : (
                   <article key={item.id} className="rise">
-                    <p className="mb-3 text-[0.6875rem] font-bold uppercase tracking-[0.11em] text-[#B58A1B]">
+                    <p className="mb-3 text-[0.6875rem] font-bold uppercase tracking-[0.11em] text-accent">
                       Assistente oficial
                     </p>
 
@@ -239,6 +280,24 @@ export function ChatClient({
                         <AlertIcon className="h-4 w-4 shrink-0" />
                         {item.error}
                       </p>
+                    ) : null}
+
+                    {/* Respostas prováveis: um clique resolve a ambiguidade,
+                        sem obrigar a pessoa a redigir de novo. */}
+                    {item.clarifyOptions && item.clarifyOptions.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.clarifyOptions.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void send(option)}
+                            className="rounded-full border border-navy/35 bg-surface px-3.5 py-1.5 text-[0.8125rem] font-semibold text-navy transition-colors hover:bg-chip-soft disabled:opacity-50"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
                     ) : null}
 
                     {item.citations.length > 0 ? (
@@ -283,6 +342,40 @@ export function ChatClient({
                           ))}
                         </ul>
                       </section>
+                    ) : null}
+
+                    {/* Sinal de qualidade. As respostas marcadas como não úteis
+                        são o que alimenta o relatório de lacunas do acervo. */}
+                    {item.messageId && !item.pending ? (
+                      <div className="mt-4 flex items-center gap-2">
+                        {item.feedback ? (
+                          <p className="text-[0.75rem] text-muted">
+                            {item.feedback === 'util'
+                              ? 'Obrigado! Isso ajuda a calibrar o assistente.'
+                              : 'Anotado. A coordenação vê o que o acervo ainda não responde.'}
+                          </p>
+                        ) : (
+                          <>
+                            <span className="text-[0.75rem] text-muted">Esta resposta ajudou?</span>
+                            <button
+                              type="button"
+                              onClick={() => void sendFeedback(item, 'util')}
+                              aria-label="Resposta útil"
+                              className="rounded-md p-1.5 text-muted transition-colors hover:bg-chip-soft hover:text-success"
+                            >
+                              <ThumbUpIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void sendFeedback(item, 'nao_util')}
+                              aria-label="Resposta não ajudou"
+                              className="rounded-md p-1.5 text-muted transition-colors hover:bg-chip-soft hover:text-danger"
+                            >
+                              <ThumbDownIcon className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     ) : null}
                   </article>
                 ),

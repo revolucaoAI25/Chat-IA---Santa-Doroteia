@@ -1,8 +1,18 @@
 import { NextResponse } from 'next/server';
 import { getSession, isAdmin } from '@/lib/auth/session';
-import { ingestDocument } from '@/lib/ingest/pipeline';
+import { ingestDocument, type ClassificationOverrides } from '@/lib/ingest/pipeline';
 import { isSupported } from '@/lib/ingest/extract';
-import { userRole, type Role } from '@/lib/db/schema';
+import {
+  documentType,
+  segment as segmentEnum,
+  userRole,
+  type DocumentTypeValue,
+  type Role,
+  type Segment,
+} from '@/lib/db/schema';
+import { SERIES } from '@/lib/taxonomy';
+
+const SERIE_VALUES = new Set(SERIES.map((s) => s.value));
 
 export const runtime = 'nodejs';
 // OCR e classificação de um PDF longo passam bem de 60s.
@@ -53,9 +63,39 @@ export async function POST(request: Request) {
     .map(String)
     .filter((value): value is Role => (userRole.enumValues as readonly string[]).includes(value));
 
+  // Campos ausentes ficam `undefined` de propósito: é o que sinaliza ao
+  // pipeline "mantenha o que a IA deduziu". Lista vazia enviada pelo formulário
+  // é diferente — significa "toda a escola", uma escolha explícita.
+  const overrides: ClassificationOverrides = {};
+
   const validUntil = form.get('validUntil');
-  const validUntilOverride =
-    typeof validUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validUntil) ? validUntil : null;
+  if (typeof validUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
+    overrides.validUntil = validUntil;
+  }
+
+  const type = String(form.get('type') ?? '');
+  if ((documentType.enumValues as readonly string[]).includes(type)) {
+    overrides.type = type as DocumentTypeValue;
+  }
+
+  const anoLetivo = Number(form.get('anoLetivo'));
+  if (Number.isInteger(anoLetivo) && anoLetivo >= 2000 && anoLetivo <= 2100) {
+    overrides.anoLetivo = anoLetivo;
+  }
+
+  const etapa = String(form.get('etapa') ?? '').trim();
+  if (etapa) overrides.etapa = etapa.slice(0, 40);
+
+  if (form.get('overrideScope') === 'true') {
+    overrides.segments = form
+      .getAll('segments')
+      .map(String)
+      .filter((s): s is Segment => (segmentEnum.enumValues as readonly string[]).includes(s));
+    overrides.series = form
+      .getAll('series')
+      .map(String)
+      .filter((s) => SERIE_VALUES.has(s));
+  }
 
   try {
     const result = await ingestDocument({
@@ -65,7 +105,7 @@ export async function POST(request: Request) {
       mimeType: file.type,
       buffer: Buffer.from(await file.arrayBuffer()),
       audience,
-      validUntilOverride,
+      overrides,
     });
 
     return NextResponse.json(result);

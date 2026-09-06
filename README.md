@@ -24,10 +24,21 @@ OCR, extração automática de datas e controle de acesso por perfil de verdade.
 | Vigência de documentos (expiram e deixam de ser fonte) | ✅ |
 | Deduplicação por checksum | ✅ |
 | Telemetria de tokens/latência por resposta | ✅ |
+| Whitelabel editável: cores, tipografia, logo e nome | ✅ |
+| Controles de exibição no upload (ano, etapa, segmento, série, público) | ✅ |
+| Reescrita de pergunta (resolve "e a de história?") | ✅ |
+| Pergunta de esclarecimento quando — e só quando — é ambíguo | ✅ |
+| Agenda estruturada injetada nas perguntas de data | ✅ |
+| Perfil com contexto acadêmico atualizável pela própria pessoa | ✅ |
+| Feedback útil/não útil por resposta | ✅ |
+| Limite de perguntas por usuário | ✅ |
 
 Fora do escopo desta entrega (mas com o banco e a arquitetura já preparados):
 telas de Documentos e Calendário, sincronização com Google Drive, automação de
-lembretes por e-mail, relatórios e a aba de Whitelabel.
+lembretes por e-mail e relatórios.
+
+**Como publicar:** o passo a passo de Supabase e Vercel está em
+[DEPLOY.md](./DEPLOY.md).
 
 ---
 
@@ -71,9 +82,10 @@ npx tsx scripts/verify.ts
 ```
 
 Verifica, contra o banco semeado, que o aluno não alcança o documento restrito
-ao corpo docente (nem pela listagem, nem pela busca da IA), que documentos
-vencidos saem do acervo, que o recorte por série funciona e que a busca híbrida
-acha tanto por sentido quanto por número de comunicado.
+ao corpo docente (nem pela listagem, nem pela busca da IA, nem pela agenda), que
+documentos vencidos saem do acervo, que o recorte por série funciona, que a
+busca híbrida acha tanto por sentido quanto por número de comunicado, e que a
+agenda só devolve eventos futuros já validados por um humano.
 
 ---
 
@@ -114,6 +126,46 @@ Next.js 16 (App Router)  ── UI + rotas de API, tudo no mesmo deploy
    (`[Cronograma de provas · nº 231 · … · 7º ano]`) antes de virar vetor, o que
    melhora muito a recuperação de trechos do meio do documento.
 
+### O caminho de uma pergunta
+
+```
+pergunta → planejar → [esclarecer?] → buscar (documentos + agenda) → responder
+```
+
+1. **Planejar** (`lib/rag/plan.ts`) — uma chamada pequena que faz duas coisas:
+
+   - **Reescreve** a pergunta como consulta autônoma. "E a de história?" não
+     recupera nada, porque não tem sujeito; vira "prova de história do 7º ano na
+     3ª etapa", que recupera. Sem isso, toda pergunta de acompanhamento falha.
+   - **Decide se vale perguntar de volta.** O padrão é *não* perguntar: o
+     sistema já sabe série, turma, papel e disciplinas, e perguntar o que já se
+     sabe é atrito. Quando há mais de uma leitura possível, ele escolhe a mais
+     provável e **declara a suposição** na resposta ("Considerando a 3ª etapa,
+     que é a atual: …"), o que deixa a pessoa corrigir sem ter sido interrogada.
+     Só quando as leituras levam a respostas incompatíveis é que ele pergunta —
+     uma pergunta curta, com até 4 opções clicáveis.
+
+   O planejador é uma otimização, não um requisito: se a chamada falhar, a busca
+   usa a pergunta como veio.
+
+2. **Buscar** — a busca híbrida abaixo, mais a agenda estruturada quando a
+   pergunta é de data.
+
+3. **Responder** — com as citações e, se houver, a suposição declarada.
+
+### Datas vêm da agenda, não do texto
+
+Perguntas de "quando" são as mais frequentes e as que o RAG puro responde pior:
+o trecho recuperado costuma ser a tabela inteira do 6º ao 9º ano, e sobra para o
+modelo achar a linha certa e ordenar por data — exatamente o que ele erra.
+
+Então `lib/rag/events.ts` consulta a tabela `document_events`, já filtrada por
+série e por vigência, cortando o passado e ordenando por data. O modelo recebe
+uma lista curta e correta em vez de um bloco de texto para interpretar.
+
+Só entram eventos com `review = 'ativo'`. O que a IA extraiu com confiança baixa
+fica em `a_revisar` e **não é apresentado como fato** até alguém conferir.
+
 ### A busca é híbrida, de propósito
 
 `lib/rag/retrieve.ts` roda **duas** buscas e funde os resultados com
@@ -139,6 +191,43 @@ acontece dentro do `SELECT` — os trechos proibidos nunca chegam ao prompt. O
 download por URL direta devolve **404** (e não 403) para quem não tem acesso:
 saber o id de um documento não é evidência de que ele existe.
 
+### Whitelabel
+
+A identidade visual fica em `tenants.branding` (jsonb) e é traduzida para CSS
+variables em `lib/branding.ts`, aplicadas no elemento raiz do grupo `(app)`.
+Como o tema inteiro já é escrito em cima dessas variáveis, mudar a cor principal
+repinta botões, links, chips e estados ativos de uma vez — sem classe
+condicional espalhada pelos componentes.
+
+Duas decisões que valem explicar:
+
+- **Cores são validadas como `#RRGGBB` no servidor.** Elas viram CSS aplicado na
+  árvore inteira; aceitar string livre de um formulário seria aceitar CSS
+  arbitrário.
+- **Tipografia é preset, não campo livre.** As famílias precisam estar
+  pré-carregadas para não causar troca de fonte visível, e cada combinação já foi
+  conferida quanto a peso, legibilidade e acentuação do português.
+
+O logo é servido por `/api/tenant/logo?v=<hash>`, que funciona igual nos dois
+drivers de storage (o bucket do Supabase é privado e o disco local não tem URL
+pública). O `v` muda a cada troca de arquivo, o que invalida o cache do
+navegador.
+
+### Contexto do usuário
+
+Além do cadastro da secretaria, cada pessoa mantém o próprio contexto em
+**Meu perfil**: disciplinas que leciona, segmentos, séries que acompanha e uma
+observação livre. Tudo isso entra no prompt.
+
+A separação importante: **contexto ajusta o tom e o foco; nunca o acesso.**
+Um aluno não pode editar a própria série, porque a série é o que recorta quais
+documentos ele enxerga — deixar isso editável seria entregar a chave do cofre.
+A observação livre vai para o prompt rotulada como texto do usuário, para não
+ser lida como instrução do sistema.
+
+Como a sessão lê o usuário do banco a cada requisição, uma correção na secretaria
+vale na hora, sem esperar o cookie expirar.
+
 ### Vigência
 
 Todo documento tem uma janela de validade. A IA deduz a janela do próprio
@@ -154,27 +243,50 @@ que o filtro de vigência está na consulta, e não num job de exclusão.
 
 Modelos configuráveis por variável de ambiente, sem tocar no código:
 
+A decisão que manda aqui é uma assimetria: **a ingestão roda uma vez por
+documento; o chat roda dezenas de milhares de vezes por mês.** Um erro na
+extração vira dado errado no banco e contamina toda resposta futura — então ali
+vale pagar mais. No chat, o trabalho difícil (achar o trecho certo) já foi feito
+pela busca, e o modelo só precisa redigir sem inventar.
+
 | Papel | Padrão | Por quê |
 |---|---|---|
-| Chat | `gpt-4.1-mini` | Segue instrução bem (crítico para "só use as fontes") a uma fração do custo do modelo grande. |
-| Classificação/datas | `gpt-4.1-mini` | Temperatura 0 + JSON Schema estrito. A tarefa é de extração, não de raciocínio aberto. |
+| Chat | `gpt-4.1-mini` | Segue instrução com rigor ("só use as fontes"), que importa mais aqui do que capacidade de raciocínio. |
+| Planejador | `gpt-4.1-mini` | Tarefa pequena e estruturada, mas roda a cada pergunta: é onde o modelo barato mais rende. |
+| Classificação/datas | `gpt-4.1` | Modelo maior de propósito, pelo argumento acima. Como roda uma vez por documento, o custo é marginal. |
 | OCR | `gpt-4.1-mini` | Multimodal, evita manter um Tesseract e lida melhor com tabela digitalizada. |
-| Embeddings | `text-embedding-3-small` | 1536 dimensões, ~5x mais barato que o `large` com perda pequena de recall no português. |
+| Embeddings | `text-embedding-3-small` | 1536 dimensões, bem mais barato que o `large` com perda pequena de recall no português. |
+
+Todos são trocáveis por variável de ambiente. Se quiser cortar mais, o caminho é
+o `nano` no planejador — não no chat, onde a fidelidade à fonte é o produto.
 
 **Estimativa mensal para o volume do documento de escopo** (17 mil perguntas/mês,
-430 PDFs iniciais). Ordem de grandeza para orçamento, não cotação:
+430 PDFs iniciais):
 
 | Item | Estimativa |
 |---|---|
 | Chat — 17k perguntas × ~4k tokens de entrada + ~400 de saída | US$ 25 – 40 |
-| Ingestão inicial — 430 PDFs (extração + classificação + embeddings) | US$ 8 – 15, uma vez |
-| Ingestão corrente — ~40 documentos/mês | US$ 1 – 3 |
-| **IA, por mês, em regime** | **≈ US$ 30 – 45** |
+| Planejador — 17k chamadas × ~700 tokens | US$ 3 – 6 |
+| Ingestão inicial — 430 PDFs com `gpt-4.1` na classificação | US$ 25 – 45, uma vez |
+| Ingestão corrente — ~40 documentos/mês | US$ 3 – 6 |
+| **IA, por mês, em regime** | **≈ US$ 35 – 55** |
 
-Duas alavancas grandes de custo, já previstas na arquitetura: o cabeçalho de
-contexto por trecho permite reduzir de 8 para 5 os trechos enviados sem perder
-qualidade; e o cache de prompt da OpenAI corta ~50% da entrada quando o prefixo
-do sistema se repete — vale ativar quando o volume subir.
+> **Confira os preços antes de fechar o orçamento.** Estes números vêm do meu
+> conhecimento de treinamento e a tabela da OpenAI muda. Use
+> <https://openai.com/api/pricing> como fonte. A estrutura de consumo
+> (quantidade de chamadas e tokens por chamada) é o que este projeto define e
+> está correta; o preço por token, confirme.
+
+Três alavancas de custo, já previstas na arquitetura:
+
+- o cabeçalho de contexto por trecho permite baixar de 8 para 5 os trechos
+  enviados sem perder qualidade;
+- o **cache de prompt** da OpenAI corta boa parte do custo de entrada quando o
+  prefixo do sistema se repete — e aqui ele se repete a cada pergunta; vale
+  ativar quando o volume subir;
+- a agenda estruturada responde perguntas de data com uma lista curta em vez de
+  tabelas inteiras, o que já reduz os tokens de entrada nas perguntas mais
+  frequentes.
 
 Infraestrutura: **Vercel Pro ~US$ 20/mês** + **Supabase Pro ~US$ 25/mês** cobrem
 com folga 3.800 alunos e o acervo de 113 MB.
@@ -207,8 +319,10 @@ mexer:
   perfil sem credencial. Ficam desligados automaticamente quando
   `NODE_ENV=production`, e só voltam com `ENABLE_DEMO_LOGIN=true`. A checagem é
   feita **no servidor** (`lib/auth/demo.ts`), não só na interface.
-- **Sessão** — JWT assinado em cookie `httpOnly` (`lib/auth/session.ts`). Não há
-  revogação nem refresh; para produção, migrar para o Supabase Auth (GoTrue) e
+- **Sessão** — cookie `httpOnly` com JWT que carrega **apenas o id**; papel,
+  série e situação são lidos do banco a cada requisição (`lib/auth/session.ts`),
+  então desativar alguém ou corrigir a série vale na hora. Falta revogação
+  explícita e refresh: para produção, migrar para o Supabase Auth (GoTrue) e
   usar o `password_hash` só como caminho de migração.
 - **Row Level Security** — o acesso é garantido na camada de consulta. Como
   defesa em profundidade, vale replicar as regras em políticas RLS no Postgres,
@@ -218,8 +332,12 @@ mexer:
   e PDFs grandes vão estourar). Para os 430 PDFs do acervo histórico, mover para
   uma fila (Inngest, QStash ou Supabase Queues) — a função `ingestDocument()` já
   é uma unidade de trabalho isolada e idempotente por checksum.
-- **Rate limiting** — não há. Antes de abrir para 3.800 alunos, limitar
-  `/api/chat` por usuário.
+- **Rate limiting** — há um limite por usuário (`lib/rate-limit.ts`, padrão 20
+  perguntas / 10 min), contando mensagens no banco em vez de manter estado em
+  memória, que não sobreviveria a várias instâncias serverless. Protege contra
+  uso acidental em excesso e contra uma conta comprometida queimar a cota da
+  OpenAI; **não** é proteção contra ataque distribuído — para isso, use o
+  firewall da Vercel.
 - **`npm audit`** — duas advertências moderadas, ambas em dependências de
   desenvolvimento (`esbuild` dentro do `drizzle-kit`; `uuid` dentro do
   `exceljs`, num caminho de código que não usamos). Corrigir exigiria downgrades
@@ -236,5 +354,5 @@ mexer:
 | `npm run db:migrate` | Aplica os `.sql` de `drizzle/` em ordem |
 | `npm run db:seed` | Recria usuários e acervo de demonstração |
 | `npm run setup` | `db:migrate` + `db:seed` |
-| `npx tsx scripts/verify.ts` | Confere acesso por perfil, vigência e busca |
+| `npx tsx scripts/verify.ts` | Confere acesso por perfil, vigência, busca e agenda |
 | `npm run typecheck` | `tsc --noEmit` |

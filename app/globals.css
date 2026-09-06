@@ -24,6 +24,9 @@
   --color-line: #dedfde;
   --color-line-strong: #cfc9bb;
 
+  /* Cor de destaque (rótulo "Assistente oficial", marcadores). Editável no Whitelabel. */
+  --color-accent: #b58a1b;
+
   --color-success: #1c7a4d;
   --color-success-soft: #e2f0e8;
   --color-warning: #9a6b12;

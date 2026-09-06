@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from './logo';
-import { GearIcon, SparkleIcon } from './icons';
+import { GearIcon, SparkleIcon, UserIcon } from './icons';
 import { ROLE_LABELS } from '@/lib/taxonomy';
 import type { SessionUser } from '@/lib/auth/session';
 
@@ -13,10 +13,23 @@ interface NavItem {
   icon: (props: { className?: string }) => React.ReactElement;
 }
 
-export function Sidebar({ user, logoUrl }: { user: SessionUser; logoUrl?: string | null }) {
+export function Sidebar({
+  user,
+  logoUrl,
+  logoSize = 176,
+  schoolName,
+}: {
+  user: SessionUser;
+  logoUrl?: string | null;
+  logoSize?: number;
+  schoolName?: string;
+}) {
   const pathname = usePathname();
 
-  const items: NavItem[] = [{ href: '/chat', label: 'Assistente', icon: SparkleIcon }];
+  const items: NavItem[] = [
+    { href: '/chat', label: 'Assistente', icon: SparkleIcon },
+    { href: '/perfil', label: 'Meu perfil', icon: UserIcon },
+  ];
   if (user.role === 'admin' || user.role === 'coordenacao') {
     items.push({ href: '/admin', label: 'Administração', icon: GearIcon });
   }
@@ -24,7 +37,7 @@ export function Sidebar({ user, logoUrl }: { user: SessionUser; logoUrl?: string
   return (
     <aside className="flex w-[272px] shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
       <div className="flex justify-center px-6 pb-7 pt-7">
-        <Logo logoUrl={logoUrl} />
+        <Logo logoUrl={logoUrl} size={logoSize} schoolName={schoolName} />
       </div>
 
       <nav className="flex flex-col gap-1 px-4">

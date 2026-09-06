@@ -75,6 +75,8 @@ export const eventReview = pgEnum('event_review', [
   'cancelado',
 ]);
 
+export const messageFeedback = pgEnum('message_feedback', ['util', 'nao_util']);
+
 /* -------------------------------------------------------------------------- */
 /*  Tenants — a plataforma é whitelabel e atende mais de uma unidade           */
 /* -------------------------------------------------------------------------- */
@@ -85,10 +87,30 @@ export const tenants = pgTable('tenants', {
   displayName: text('display_name').notNull(),
   logoUrl: text('logo_url'),
   faviconUrl: text('favicon_url'),
-  /** Tokens de marca (cores, tamanho do logo) usados pela tela de Whitelabel. */
-  branding: jsonb('branding').$type<Record<string, string | number>>().notNull().default({}),
+  /** Tokens de marca (cores, tipografia, tamanho do logo) editados no Whitelabel. */
+  branding: jsonb('branding').$type<Branding>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Identidade visual editável pelo administrador. Todo campo é opcional: o que
+ * não estiver definido cai no padrão do tema, então um tenant recém-criado já
+ * renderiza correto sem nenhuma configuração.
+ */
+export interface Branding {
+  primary?: string;
+  primaryHover?: string;
+  primarySoft?: string;
+  background?: string;
+  surface?: string;
+  ink?: string;
+  accent?: string;
+  /** Chave de um preset tipográfico (ver lib/branding.ts). */
+  fontPreset?: string;
+  /** Largura do logo na barra lateral, em px. */
+  logoSize?: number;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Usuários                                                                   */
@@ -114,6 +136,18 @@ export const users = pgTable(
     turma: text('turma'),
     /** Para responsáveis/professores: séries adicionais que a pessoa acompanha. */
     extraSeries: text('extra_series').array().notNull().default(sql`'{}'::text[]`),
+
+    /** Disciplinas que a pessoa leciona. Só afeta o prompt, nunca o acesso. */
+    disciplinas: text('disciplinas').array().notNull().default(sql`'{}'::text[]`),
+    /** Segmentos em que a pessoa dá aula. */
+    segmentsTaught: segment('segments_taught').array().notNull().default(sql`'{}'::segment[]`),
+    /**
+     * Observação livre mantida pela própria pessoa. Entra no prompt para dar
+     * contexto, mas jamais no filtro de acesso — texto livre não pode ampliar
+     * permissão.
+     */
+    contextNote: text('context_note'),
+    contextUpdatedAt: timestamp('context_updated_at', { withTimezone: true }),
 
     active: boolean('active').notNull().default(true),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
@@ -314,9 +348,26 @@ export const messages = pgTable(
     completionTokens: integer('completion_tokens'),
     latencyMs: integer('latency_ms'),
     model: text('model'),
+
+    /**
+     * Consulta autônoma que foi de fato para a busca, depois de resolver
+     * follow-ups. Guardada para auditar por que uma resposta saiu ruim.
+     */
+    searchQuery: text('search_query'),
+    /** A resposta foi um pedido de esclarecimento em vez de uma resposta. */
+    wasClarification: boolean('was_clarification').notNull().default(false),
+
+    /** Sinal do usuário — alimenta o relatório de lacunas de informação. */
+    feedback: messageFeedback('feedback'),
+    feedbackNote: text('feedback_note'),
+    feedbackAt: timestamp('feedback_at', { withTimezone: true }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('messages_conversation_idx').on(t.conversationId, t.createdAt)],
+  (t) => [
+    index('messages_conversation_idx').on(t.conversationId, t.createdAt),
+    index('messages_role_created_idx').on(t.role, t.createdAt),
+  ],
 );
 
 /* -------------------------------------------------------------------------- */

@@ -5,6 +5,7 @@ import { users } from '@/lib/db/schema';
 import type { SessionUser } from '@/lib/auth/session';
 import { documentVisibilityFilter } from '@/lib/rag/access';
 import { retrieve } from '@/lib/rag/retrieve';
+import { upcomingEvents } from '@/lib/rag/events';
 
 /**
  * Verificação de fumaça do que não pode quebrar: o recorte de acesso por
@@ -44,6 +45,9 @@ async function main() {
       serie: u.serie,
       turma: u.turma,
       extraSeries: u.extraSeries,
+      disciplinas: u.disciplinas,
+      segmentsTaught: u.segmentsTaught,
+      contextNote: u.contextNote,
     };
   };
 
@@ -105,6 +109,53 @@ async function main() {
     vazamento.every((c) => !c.title.includes('Corpo Docente')),
     `${vazamento.length} trecho(s)`,
   );
+
+  console.log('\nAGENDA ESTRUTURADA\n');
+
+  const agenda7 = await upcomingEvents(aluno7);
+  const agendaEM = await upcomingEvents(alunoEM);
+  const agendaProf = await upcomingEvents(professor);
+
+  check(
+    'aluno do 7º ano recebe eventos na agenda',
+    agenda7.length > 0,
+    `${agenda7.length} evento(s)`,
+  );
+  check(
+    'a agenda vem ordenada por data',
+    agenda7.every((e, i) => i === 0 || agenda7[i - 1].startsOn <= e.startsOn),
+  );
+  check(
+    'a agenda não traz nada que já passou',
+    agenda7.every((e) => (e.endsOn ?? e.startsOn) >= new Date().toISOString().slice(0, 10)),
+  );
+  check(
+    'só entram eventos já validados (review = ativo)',
+    agenda7.every((e) => e.review === 'ativo'),
+  );
+  check(
+    'aluno do Ensino Médio não recebe prova do 7º ano',
+    !agendaEM.some((e) => e.series.includes('7_ano_fund2')),
+  );
+  check(
+    'aluno do 7º ano não recebe o Simulado ENEM',
+    !agenda7.some((e) => e.title.includes('Simulado ENEM')),
+  );
+  check(
+    'aluno não recebe prazos internos do corpo docente',
+    !agenda7.some((e) => e.documentTitle.includes('Corpo Docente')),
+  );
+  check(
+    'professor recebe os prazos internos do corpo docente',
+    agendaProf.some((e) => e.documentTitle.includes('Corpo Docente')),
+  );
+
+  console.log(
+    `\n  agenda: aluno 7º=${agenda7.length}  aluno EM=${agendaEM.length}  professor=${agendaProf.length}`,
+  );
+  if (agenda7[0]) {
+    console.log(`  próximo do 7º ano: ${agenda7[0].startsOn} — ${agenda7[0].title}`);
+  }
 
   console.log(
     failures === 0

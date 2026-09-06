@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { tenants } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { Sidebar } from '@/components/sidebar';
+import { brandingStyle, logoSize } from '@/lib/branding';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getSession();
@@ -13,15 +14,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // instalação whitelabel.
   const tenant = await db.query.tenants.findFirst({
     where: eq(tenants.id, user.tenantId),
-    columns: { logoUrl: true },
+    columns: { logoUrl: true, branding: true, displayName: true },
   });
 
   return (
     // Altura travada na viewport: quem rola é a área de conteúdo de cada tela,
     // e não a página. É o que mantém o campo de pergunta sempre visível numa
     // conversa longa.
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar user={user} logoUrl={tenant?.logoUrl} />
+    //
+    // `style` traz as CSS variables do tenant, sobrescrevendo os tokens do
+    // tema para toda a árvore — é assim que o Whitelabel repinta a interface.
+    <div className="flex h-screen overflow-hidden" style={brandingStyle(tenant?.branding)}>
+      <Sidebar
+        user={user}
+        logoUrl={tenant?.logoUrl}
+        logoSize={logoSize(tenant?.branding)}
+        schoolName={tenant?.displayName ?? ''}
+      />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
     </div>
   );

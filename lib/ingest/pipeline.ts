@@ -6,6 +6,7 @@ import {
   documentEvents,
   documents,
   ingestionJobs,
+  type DocumentTypeValue,
   type Role,
   type Segment,
 } from '@/lib/db/schema';
@@ -19,6 +20,23 @@ import { extractDocument } from './extract';
 /** Vigência padrão quando nem o documento nem o administrador definem uma. */
 const DEFAULT_RETENTION_MONTHS = Number(process.env.DEFAULT_RETENTION_MONTHS ?? 12);
 
+/**
+ * Correções que o administrador impõe sobre a classificação automática.
+ *
+ * A IA acerta a maior parte, mas quem responde pela escola é a coordenação:
+ * qualquer campo preenchido aqui vence o que o modelo deduziu. Campo ausente
+ * (`undefined`) mantém a sugestão da IA; lista vazia é uma escolha explícita
+ * de "vale para toda a escola".
+ */
+export interface ClassificationOverrides {
+  type?: DocumentTypeValue;
+  anoLetivo?: number | null;
+  etapa?: string | null;
+  segments?: Segment[];
+  series?: string[];
+  validUntil?: string | null;
+}
+
 export interface IngestOptions {
   tenantId: string;
   userId: string;
@@ -27,8 +45,7 @@ export interface IngestOptions {
   buffer: Buffer;
   /** Vazio = toda a escola. Definido pelo administrador na tela de ingestão. */
   audience: Role[];
-  /** Sobrepõe a vigência sugerida pela IA. */
-  validUntilOverride?: string | null;
+  overrides?: ClassificationOverrides;
 }
 
 export interface IngestResult {
@@ -120,10 +137,19 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
       referenceDate: new Date().toISOString().slice(0, 10),
     });
 
+    // A escolha do administrador vence a dedução da IA, campo a campo.
+    const overrides = options.overrides ?? {};
     const validUntil =
-      options.validUntilOverride !== undefined && options.validUntilOverride !== null
-        ? options.validUntilOverride
+      overrides.validUntil !== undefined && overrides.validUntil !== null
+        ? overrides.validUntil
         : (analysis.validUntil ?? defaultValidUntil());
+
+    const finalType = overrides.type ?? analysis.type;
+    const finalSegments = overrides.segments ?? analysis.segments;
+    const finalSeries = overrides.series ?? analysis.series;
+    const finalAnoLetivo =
+      overrides.anoLetivo !== undefined ? overrides.anoLetivo : analysis.anoLetivo;
+    const finalEtapa = overrides.etapa !== undefined ? overrides.etapa : analysis.etapa;
 
     // 4. Arquivo original preservado para o "baixe o PDF" das citações.
     const storagePath = `${tenantId}/${checksum.slice(0, 2)}/${checksum}-${safeName(fileName)}`;
@@ -135,12 +161,12 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
         tenantId,
         title: analysis.title || fileName,
         docNumber: analysis.docNumber,
-        type: analysis.type,
+        type: finalType,
         summary: analysis.summary,
-        segments: analysis.segments,
-        series: analysis.series,
-        etapa: analysis.etapa,
-        anoLetivo: analysis.anoLetivo,
+        segments: finalSegments,
+        series: finalSeries,
+        etapa: finalEtapa,
+        anoLetivo: finalAnoLetivo,
         validFrom: analysis.validFrom,
         validUntil,
         audience: options.audience,

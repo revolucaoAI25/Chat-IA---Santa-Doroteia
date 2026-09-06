@@ -40,19 +40,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (!(await verifyPassword(password, user.passwordHash))) return genericError;
 
   await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, user.id));
-
-  await setSessionCookie({
-    id: user.id,
-    tenantId: user.tenantId,
-    name: user.name,
-    email: user.email,
-    matricula: user.matricula,
-    role: user.role,
-    segment: user.segment,
-    serie: user.serie,
-    turma: user.turma,
-    extraSeries: user.extraSeries,
-  });
+  await setSessionCookie(user.id);
 
   redirect('/chat');
 }
@@ -79,18 +67,6 @@ export async function loginAsDemo(matricula: string): Promise<void> {
   });
   if (!user) redirect('/login?error=perfil-nao-encontrado');
 
-  await setSessionCookie({
-    id: user.id,
-    tenantId: user.tenantId,
-    name: user.name,
-    email: user.email,
-    matricula: user.matricula,
-    role: user.role,
-    segment: user.segment,
-    serie: user.serie,
-    turma: user.turma,
-    extraSeries: user.extraSeries,
-  });
-
+  await setSessionCookie(user.id);
   redirect('/chat');
 }

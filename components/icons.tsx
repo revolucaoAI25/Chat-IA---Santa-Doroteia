@@ -96,6 +96,33 @@ export function SpinnerIcon({ className }: Props) {
   );
 }
 
+export function UserIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
+      <circle cx="10" cy="6.6" r="3.1" />
+      <path d="M3.8 17a6.2 6.2 0 0 1 12.4 0" />
+    </svg>
+  );
+}
+
+export function ThumbUpIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
+      <path d="M6.2 17.4V8.6l3.4-6a1.7 1.7 0 0 1 2.4 1.9l-.8 3.3h3.9a1.7 1.7 0 0 1 1.6 2.1l-1.4 5.6a1.7 1.7 0 0 1-1.6 1.3H6.2Z" />
+      <path d="M6.2 8.6H2.9v8.8h3.3" />
+    </svg>
+  );
+}
+
+export function ThumbDownIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
+      <path d="M13.8 2.6v8.8l-3.4 6a1.7 1.7 0 0 1-2.4-1.9l.8-3.3H4.9a1.7 1.7 0 0 1-1.6-2.1l1.4-5.6a1.7 1.7 0 0 1 1.6-1.3h7.5Z" />
+      <path d="M13.8 11.4h3.3V2.6h-3.3" />
+    </svg>
+  );
+}
+
 export function FileIcon({ className }: Props) {
   return (
     <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>

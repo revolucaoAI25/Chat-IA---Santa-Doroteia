@@ -7,16 +7,21 @@
  * Quando o tenant tem `logoUrl` — o que a tela de Whitelabel preenche — a
  * imagem real substitui o desenho, sem mudar o espaço reservado no layout.
  */
-export function Logo({ size = 176, logoUrl }: { size?: number; logoUrl?: string | null }) {
+export function Logo({
+  size = 176,
+  logoUrl,
+  schoolName,
+}: {
+  size?: number;
+  logoUrl?: string | null;
+  schoolName?: string;
+}) {
+  const alt = schoolName || 'Colégio Santa Dorotéia — Belo Horizonte';
+
   if (logoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- URL arbitrária de tenant
-      <img
-        src={logoUrl}
-        alt="Colégio Santa Dorotéia — Belo Horizonte"
-        style={{ width: size }}
-        className="h-auto"
-      />
+      <img src={logoUrl} alt={alt} style={{ width: size }} className="h-auto" />
     );
   }
 
@@ -24,7 +29,7 @@ export function Logo({ size = 176, logoUrl }: { size?: number; logoUrl?: string 
     <div
       style={{ width: size }}
       className="flex items-center gap-2.5"
-      aria-label="Colégio Santa Dorotéia — Belo Horizonte"
+      aria-label={alt}
       role="img"
     >
       <Crest className="h-[52px] w-[52px] shrink-0" />

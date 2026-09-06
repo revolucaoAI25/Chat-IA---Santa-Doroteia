@@ -10,9 +10,12 @@ import {
   UploadIcon,
 } from '@/components/icons';
 import {
+  DOCUMENT_TYPES,
   DOCUMENT_TYPE_LABELS,
   ROLE_LABELS,
+  SEGMENTS,
   SEGMENT_LABELS,
+  SERIES,
   serieLabel,
 } from '@/lib/taxonomy';
 import type { DocumentTypeValue, Role, Segment } from '@/lib/db/schema';
@@ -62,6 +65,11 @@ interface Job {
 
 const AUDIENCES: Role[] = ['aluno', 'professor', 'coordenacao'];
 
+// Janela de anos letivos oferecida no seletor: o corrente, o anterior e o
+// seguinte cobrem o que a secretaria realmente sobe.
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
+
 export function IngestClient({
   stats,
   recent,
@@ -82,9 +90,27 @@ export function IngestClient({
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Classificação: em branco = a IA decide. Preenchido = a escolha vence.
+  const [type, setType] = useState('');
+  const [anoLetivo, setAnoLetivo] = useState('');
+  const [etapa, setEtapa] = useState('');
+  const [overrideScope, setOverrideScope] = useState(false);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [series, setSeries] = useState<string[]>([]);
+
   const toggleAudience = (role: Role) =>
     setAudience((prev) =>
       prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+    );
+
+  const toggleSegment = (value: Segment) =>
+    setSegments((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
+    );
+
+  const toggleSerie = (value: string) =>
+    setSeries((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
     );
 
   async function ingest(files: File[]) {
@@ -112,6 +138,14 @@ export function IngestClient({
       body.append('file', file);
       for (const role of audience) body.append('audience', role);
       if (validUntil) body.append('validUntil', validUntil);
+      if (type) body.append('type', type);
+      if (anoLetivo) body.append('anoLetivo', anoLetivo);
+      if (etapa) body.append('etapa', etapa);
+      if (overrideScope) {
+        body.append('overrideScope', 'true');
+        for (const s of segments) body.append('segments', s);
+        for (const s of series) body.append('series', s);
+      }
 
       try {
         const response = await fetch('/api/ingest', { method: 'POST', body });
@@ -136,9 +170,10 @@ export function IngestClient({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[64rem] px-10 pb-16 pt-9">
-        <p className="eyebrow">Ingestão ao vivo</p>
+    // O contêiner de rolagem e a largura vêm da página de Administração; aqui
+    // fica só o conteúdo da aba.
+    <div>
+      <p className="eyebrow">Ingestão ao vivo</p>
         <h1 className="display mt-2 text-[2.5rem]">Suba documentos e veja a IA classificar</h1>
         <p className="mt-3 max-w-[42rem] text-[0.9375rem] leading-relaxed text-muted">
           Cada documento é extraído, categorizado (tipo, segmento, série e ano), fatiado e
@@ -236,21 +271,146 @@ export function IngestClient({
             busca.
           </p>
 
-          <div className="mt-6 max-w-xs">
-            <label className="field-label" htmlFor="valid-until">
-              Vigência até (opcional)
-            </label>
-            <input
-              id="valid-until"
-              type="date"
-              value={validUntil}
-              onChange={(event) => setValidUntil(event.target.value)}
-              className="field"
-            />
-            <p className="mt-2 text-[0.75rem] leading-relaxed text-muted">
-              Em branco, a IA deduz a vigência do próprio documento; se não der, vale o padrão de
-              12 meses. Depois dessa data o documento deixa de ser fonte para o assistente.
+          <div className="mt-7 border-t border-line pt-6">
+            <p className="eyebrow-muted">Classificação</p>
+            <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-muted">
+              Deixe em branco para a IA decidir a partir do conteúdo. O que você preencher aqui
+              vence a classificação automática.
             </p>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="field-label" htmlFor="doc-type">
+                  Tipo
+                </label>
+                <select
+                  id="doc-type"
+                  value={type}
+                  onChange={(event) => setType(event.target.value)}
+                  className="field"
+                >
+                  <option value="">A IA decide</option>
+                  {DOCUMENT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {DOCUMENT_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="field-label" htmlFor="ano-letivo">
+                  Ano letivo
+                </label>
+                <select
+                  id="ano-letivo"
+                  value={anoLetivo}
+                  onChange={(event) => setAnoLetivo(event.target.value)}
+                  className="field"
+                >
+                  <option value="">A IA decide</option>
+                  {YEARS.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="field-label" htmlFor="etapa">
+                  Etapa
+                </label>
+                <select
+                  id="etapa"
+                  value={etapa}
+                  onChange={(event) => setEtapa(event.target.value)}
+                  className="field"
+                >
+                  <option value="">A IA decide</option>
+                  {['1ª etapa', '2ª etapa', '3ª etapa', '4ª etapa', 'Anual'].map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={overrideScope}
+                  onChange={(event) => setOverrideScope(event.target.checked)}
+                  className="mt-0.5 accent-navy"
+                />
+                <span>
+                  <span className="block text-[0.875rem] font-semibold text-ink">
+                    Definir manualmente o segmento e a série
+                  </span>
+                  <span className="mt-0.5 block text-[0.75rem] leading-snug text-muted">
+                    Segmento e série recortam quem enxerga o documento. Marque para escolher em vez
+                    de aceitar o que a IA deduziu.
+                  </span>
+                </span>
+              </label>
+
+              {overrideScope ? (
+                <div className="mt-4 space-y-4 rounded-lg border border-line bg-surface p-4">
+                  <div>
+                    <p className="field-label">Segmentos</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SEGMENTS.map((seg) => (
+                        <Pill
+                          key={seg}
+                          label={SEGMENT_LABELS[seg]}
+                          active={segments.includes(seg)}
+                          onClick={() => toggleSegment(seg)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="field-label">Séries</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SERIES.map((serie) => (
+                        <Pill
+                          key={serie.value}
+                          label={serie.label}
+                          active={series.includes(serie.value)}
+                          onClick={() => toggleSerie(serie.value)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="text-[0.75rem] leading-relaxed text-muted">
+                    {segments.length === 0 && series.length === 0
+                      ? 'Nada marcado: o documento valerá para toda a escola.'
+                      : 'Só quem estiver nesses segmentos/séries verá o documento — e a IA também não o usará para os demais.'}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-5 max-w-xs">
+              <label className="field-label" htmlFor="valid-until">
+                Vigência até
+              </label>
+              <input
+                id="valid-until"
+                type="date"
+                value={validUntil}
+                onChange={(event) => setValidUntil(event.target.value)}
+                className="field"
+              />
+              <p className="mt-2 text-[0.75rem] leading-relaxed text-muted">
+                Em branco, a IA deduz a vigência do próprio documento; se não der, vale o padrão de
+                12 meses. Depois dessa data o documento deixa de ser fonte para o assistente.
+              </p>
+            </div>
           </div>
 
           {storage === 'local' ? (
@@ -351,7 +511,6 @@ export function IngestClient({
           </ul>
         </section>
       </div>
-    </div>
   );
 }
 
@@ -455,6 +614,31 @@ function Stat({
       <p className="eyebrow-muted">{label}</p>
       <p className="mt-1 font-serif text-[1.75rem] leading-none text-ink">{value}</p>
     </div>
+  );
+}
+
+function Pill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-3 py-1.5 text-[0.75rem] font-semibold transition-colors ${
+        active
+          ? 'border-navy bg-navy text-white'
+          : 'border-line-strong bg-surface text-ink hover:bg-chip-soft'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
