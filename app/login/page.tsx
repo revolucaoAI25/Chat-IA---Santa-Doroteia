@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth/session';
 import { demoLoginEnabled } from '@/lib/auth/demo';
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { tenants, users } from '@/lib/db/schema';
+import { asc, eq } from 'drizzle-orm';
+import { brandingStyle, logoSize } from '@/lib/branding';
 import { LoginForm } from './login-form';
 
 export const metadata = { title: 'Entrar · Colégio Santa Dorotéia' };
@@ -12,6 +13,13 @@ export default async function LoginPage() {
   if (await getSession()) redirect('/chat');
 
   const showDemo = demoLoginEnabled();
+
+  // A tela de login também é whitelabel: sem isto, a escola veria a marca
+  // padrão justamente na primeira tela.
+  const tenant = await db.query.tenants.findFirst({
+    columns: { displayName: true, logoUrl: true, branding: true },
+    orderBy: asc(tenants.createdAt),
+  });
 
   // Os cartões de acesso rápido são montados a partir do banco, para nunca
   // oferecerem um perfil que o seed não criou.
@@ -27,12 +35,20 @@ export default async function LoginPage() {
           })
           .from(users)
           .where(eq(users.active, true))
+          // Sem ORDER BY o Postgres devolve em ordem arbitrária, e os cartões
+          // trocavam de lugar entre um carregamento e outro.
+          .orderBy(asc(users.role), asc(users.name))
       ).filter((u) => ['2026074', 'P1042', 'ADM001'].includes(u.matricula))
     : [];
 
   return (
-    <main className="flex min-h-screen">
-      <LoginForm demoProfiles={demoProfiles} />
+    <main className="flex min-h-screen" style={brandingStyle(tenant?.branding)}>
+      <LoginForm
+        demoProfiles={demoProfiles}
+        logoUrl={tenant?.logoUrl ?? null}
+        logoSize={logoSize(tenant?.branding)}
+        schoolName={tenant?.displayName ?? ''}
+      />
 
       {/* Painel institucional: só decorativo, escondido no mobile. */}
       <section className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-navy p-14 text-white lg:flex">

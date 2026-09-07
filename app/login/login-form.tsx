@@ -15,18 +15,28 @@ interface DemoProfile {
   turma: string | null;
 }
 
-export function LoginForm({ demoProfiles }: { demoProfiles: DemoProfile[] }) {
+export function LoginForm({
+  demoProfiles,
+  logoUrl,
+  logoSize = 188,
+  schoolName,
+}: {
+  demoProfiles: DemoProfile[];
+  logoUrl?: string | null;
+  logoSize?: number;
+  schoolName?: string;
+}) {
   const [state, formAction, pending] = useActionState<LoginState, FormData>(login, {});
   const [switching, startSwitch] = useTransition();
 
   return (
     <section className="flex w-full flex-col justify-center px-6 py-12 sm:px-14 lg:w-[46rem] lg:px-20">
       <div className="mx-auto w-full max-w-[26rem]">
-        <Logo size={188} />
+        <Logo size={logoSize} logoUrl={logoUrl} schoolName={schoolName} />
 
         <div className="mt-12">
           <p className="eyebrow">Acesso</p>
-          <h1 className="display mt-2 text-[2.5rem]">Entrar no assistente</h1>
+          <h1 className="display mt-2 text-[1.875rem] sm:text-[2.125rem] lg:text-[2.5rem]">Entrar no assistente</h1>
           <p className="mt-3 text-[0.9375rem] leading-relaxed text-muted">
             Use a sua matrícula do colégio. O perfil define quais documentos você enxerga e como
             o assistente fala com você.

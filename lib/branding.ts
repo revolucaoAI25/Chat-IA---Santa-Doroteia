@@ -118,7 +118,7 @@ export const BRANDING_DEFAULTS: Required<Omit<Branding, 'fontPreset' | 'logoSize
   background: '#F5F3EC',
   surface: '#FEFEFD',
   ink: '#101713',
-  accent: '#B58A1B',
+  accent: '#926700',
   fontPreset: 'institucional',
   logoSize: 176,
 };

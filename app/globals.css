@@ -24,12 +24,16 @@
   --color-line: #dedfde;
   --color-line-strong: #cfc9bb;
 
-  /* Cor de destaque (rótulo "Assistente oficial", marcadores). Editável no Whitelabel. */
-  --color-accent: #b58a1b;
+  /*
+   * Cor de destaque (rótulo "Assistente oficial", marcadores). Editável no
+   * Whitelabel. Escurecida do dourado original (#B58A1B, 2.86:1) para passar
+   * em 4.5:1 sobre o fundo creme — era o pior contraste da interface.
+   */
+  --color-accent: #926700;
 
   --color-success: #1c7a4d;
   --color-success-soft: #e2f0e8;
-  --color-warning: #9a6b12;
+  --color-warning: #92630a;
   --color-warning-soft: #f7edd8;
   --color-danger: #a3271f;
   --color-danger-soft: #f6e3e1;

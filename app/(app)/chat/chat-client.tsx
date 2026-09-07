@@ -269,11 +269,11 @@ export function ChatClient({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[52rem] px-10 pb-10 pt-9">
+        <div className="mx-auto w-full max-w-[52rem] px-4 pb-10 pt-7 sm:px-6 lg:px-10 lg:pt-9">
           <div className="flex items-start justify-between gap-6">
             <div>
               <p className="eyebrow">Chat fundamentado</p>
-              <h1 className="display mt-2 text-[2.5rem]">Pergunte sobre os documentos oficiais</h1>
+              <h1 className="display mt-2 text-[1.875rem] sm:text-[2.125rem] lg:text-[2.5rem]">Pergunte sobre os documentos oficiais</h1>
               <p className="mt-3 max-w-[38rem] text-[0.9375rem] leading-relaxed text-muted">
                 As respostas são fundamentadas nos documentos oficiais. Os PDFs utilizados ficam
                 disponíveis ao final de cada resposta.
@@ -482,8 +482,8 @@ export function ChatClient({
         </div>
       </div>
 
-      <div className="border-t border-line bg-header/95 backdrop-blur">
-        <div className="mx-auto w-full max-w-[52rem] px-10 py-5">
+      <div className="border-t border-line bg-header">
+        <div className="mx-auto w-full max-w-[52rem] px-4 py-4 sm:px-6 lg:px-10 lg:py-5">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -513,7 +513,7 @@ export function ChatClient({
             <div className="mt-2 flex items-end justify-between gap-4">
               <p className="text-[0.75rem] text-muted">
                 <strong className="font-semibold text-ink">Enter</strong> para enviar{' '}
-                <span className="mx-1.5 text-line-strong">·</span>
+                <span aria-hidden="true" className="mx-1.5 text-muted">·</span>
                 <strong className="font-semibold text-ink">Shift + Enter</strong> para nova linha
               </p>
               <button

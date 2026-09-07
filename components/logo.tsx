@@ -20,8 +20,17 @@ export function Logo({
 
   if (logoUrl) {
     return (
+      // Limita as DUAS dimensões, e não só a largura: um brasão em pé (mais
+      // alto que largo) esticado para 176px de largura passaria de 210px de
+      // altura e dominaria a barra lateral. Assim o lado maior é que respeita
+      // o tamanho escolhido, qualquer que seja a proporção do arquivo.
       // eslint-disable-next-line @next/next/no-img-element -- URL arbitrária de tenant
-      <img src={logoUrl} alt={alt} style={{ width: size }} className="h-auto" />
+      <img
+        src={logoUrl}
+        alt={alt}
+        style={{ maxWidth: size, maxHeight: size }}
+        className="h-auto w-auto object-contain"
+      />
     );
   }
 

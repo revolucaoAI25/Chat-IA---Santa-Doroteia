@@ -174,7 +174,7 @@ export function IngestClient({
     // fica só o conteúdo da aba.
     <div>
       <p className="eyebrow">Ingestão ao vivo</p>
-        <h1 className="display mt-2 text-[2.5rem]">Suba documentos e veja a IA classificar</h1>
+        <h1 className="display mt-2 text-[1.875rem] sm:text-[2.125rem] lg:text-[2.5rem]">Suba documentos e veja a IA classificar</h1>
         <p className="mt-3 max-w-[42rem] text-[0.9375rem] leading-relaxed text-muted">
           Cada documento é extraído, categorizado (tipo, segmento, série e ano), fatiado e
           embeddado — e já vira fonte no chat. Datas de provas e eventos são reconhecidas
@@ -213,7 +213,7 @@ export function IngestClient({
             setDragging(false);
             void ingest([...event.dataTransfer.files]);
           }}
-          className={`mt-8 rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
+          className={`mt-8 rounded-xl border-2 border-dashed p-6 text-center sm:p-10 transition-colors ${
             dragging ? 'border-navy bg-navy-soft/40' : 'border-line-strong bg-panel'
           }`}
         >
@@ -243,7 +243,7 @@ export function IngestClient({
         </div>
 
         {/* Configuração do envio */}
-        <div className="panel mt-5 p-6">
+        <div className="panel mt-5 p-4 sm:p-6">
           <p className="eyebrow-muted">Quem pode ver estes documentos</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {AUDIENCES.map((role) => {

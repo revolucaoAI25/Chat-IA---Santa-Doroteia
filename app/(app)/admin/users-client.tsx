@@ -39,7 +39,7 @@ export function UsersClient({ users, anoLetivo }: { users: AdminUser[]; anoLetiv
   return (
     <div>
       <p className="eyebrow">Base de acesso</p>
-      <h1 className="display mt-2 text-[2.5rem]">Quem entra no sistema</h1>
+      <h1 className="display mt-2 text-[1.875rem] sm:text-[2.125rem] lg:text-[2.5rem]">Quem entra no sistema</h1>
       <p className="mt-3 max-w-[42rem] text-[0.9375rem] leading-relaxed text-muted">
         A matrícula é o login. O papel e a série definem quais documentos a pessoa vê — e o que a
         IA pode usar para responder a ela. Só esta tela altera esse contexto: nem aluno nem
@@ -110,7 +110,7 @@ function UserRow({
 
   return (
     <div className={`card ${user.active ? '' : 'opacity-60'}`}>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[0.9375rem] font-semibold text-ink">{user.name}</span>
@@ -122,13 +122,13 @@ function UserRow({
               <span className="chip bg-warning-soft text-warning">Concluiu o EM</span>
             ) : null}
           </div>
-          <p className="mt-1 text-[0.75rem] text-muted">
+          <p className="mt-1 break-all text-[0.75rem] text-muted">
             {user.matricula} · {user.email}
           </p>
           <p className="mt-1.5 text-[0.8125rem] text-muted">{summary(user)}</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {saved ? (
             <span className="flex items-center gap-1 text-[0.75rem] font-semibold text-success">
               <CheckIcon className="h-3.5 w-3.5" />
@@ -152,7 +152,7 @@ function UserRow({
       </div>
 
       {open ? (
-        <form action={formAction} className="border-t border-line bg-panel p-5">
+        <form action={formAction} className="border-t border-line bg-panel p-4 sm:p-5">
           <input type="hidden" name="userId" value={user.id} />
 
           {isStudent ? (

@@ -25,15 +25,15 @@ export default async function ProfilePage() {
       <PageHeader area="Meu perfil" subtitle="O que o assistente sabe sobre você" />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[46rem] px-10 pb-16 pt-9">
+        <div className="mx-auto w-full max-w-[46rem] px-4 pb-16 pt-7 sm:px-6 lg:px-10 lg:pt-9">
           <p className="eyebrow">Contexto do assistente</p>
-          <h1 className="display mt-2 text-[2.5rem]">Como a IA fala com você</h1>
+          <h1 className="display mt-2 text-[1.875rem] sm:text-[2.125rem] lg:text-[2.5rem]">Como a IA fala com você</h1>
           <p className="mt-3 text-[0.9375rem] leading-relaxed text-muted">
             É só isto que o assistente sabe a seu respeito. Ele usa esse contexto para escolher o
             tom e para saber quais documentos pode consultar.
           </p>
 
-          <section className="panel mt-8 p-6">
+          <section className="panel mt-8 p-4 sm:p-6">
             <p className="eyebrow-muted">Cadastro</p>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Nome" value={user.name} />
@@ -51,7 +51,7 @@ export default async function ProfilePage() {
           </section>
 
           {isTeacher && (user.disciplinas.length > 0 || user.seriesTaught.length > 0) ? (
-            <section className="panel mt-4 p-6">
+            <section className="panel mt-4 p-4 sm:p-6">
               <p className="eyebrow-muted">O que você leciona</p>
               <dl className="mt-4 space-y-4">
                 {user.disciplinas.length > 0 ? (
@@ -70,7 +70,7 @@ export default async function ProfilePage() {
             </section>
           ) : null}
 
-          <section className="panel mt-4 p-6">
+          <section className="panel mt-4 p-4 sm:p-6">
             <p className="eyebrow-muted">Momento do ano letivo</p>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Hoje" value={formatToday()} />

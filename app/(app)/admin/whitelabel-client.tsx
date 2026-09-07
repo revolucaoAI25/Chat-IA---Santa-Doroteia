@@ -52,7 +52,7 @@ export function WhitelabelClient({
   return (
     <div>
       <p className="eyebrow">Identidade da escola</p>
-      <h1 className="display mt-2 text-[2.5rem]">Ajuste o seu whitelabel</h1>
+      <h1 className="display mt-2 text-[1.875rem] sm:text-[2.125rem] lg:text-[2.5rem]">Ajuste o seu whitelabel</h1>
       <p className="mt-3 max-w-[42rem] text-[0.9375rem] leading-relaxed text-muted">
         As alterações de nome, logo, cores e tipografia passam a valer para este tenant assim que
         forem salvas. A prévia ao lado usa os valores atuais do formulário.
@@ -60,7 +60,7 @@ export function WhitelabelClient({
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <form action={formAction} className="space-y-6">
-          <section className="panel p-6">
+          <section className="panel p-4 sm:p-6">
             <p className="eyebrow-muted">Marca</p>
 
             <div className="mt-4">
@@ -146,7 +146,7 @@ export function WhitelabelClient({
             </div>
           </section>
 
-          <section className="panel p-6">
+          <section className="panel p-4 sm:p-6">
             <p className="eyebrow-muted">Cores</p>
             <div className="mt-4 space-y-4">
               {COLOR_FIELDS.map((field) => (
@@ -171,7 +171,7 @@ export function WhitelabelClient({
             </div>
           </section>
 
-          <section className="panel p-6">
+          <section className="panel p-4 sm:p-6">
             <p className="eyebrow-muted">Tipografia</p>
             <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-muted">
               Combinações prontas em vez de campo livre: cada uma já foi conferida quanto a peso,

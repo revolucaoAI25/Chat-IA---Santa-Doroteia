@@ -42,14 +42,17 @@ export default async function AdminPage({
       <PageHeader area="Administração" />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[64rem] px-10 pb-16 pt-7">
-          <nav className="flex gap-2" aria-label="Seções da administração">
+        <div className="mx-auto w-full max-w-[64rem] px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-7">
+          <nav
+            className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Seções da administração"
+          >
             {TABS.map((t) => (
               <Link
                 key={t.key}
                 href={`/admin?tab=${t.key}`}
                 aria-current={active === t.key ? 'page' : undefined}
-                className={`rounded-full border px-5 py-2.5 text-[0.875rem] font-bold transition-colors ${
+                className={`shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-[0.8125rem] font-bold transition-colors sm:px-5 sm:py-2.5 sm:text-[0.875rem] ${
                   active === t.key
                     ? 'border-navy bg-navy text-white'
                     : 'border-line-strong bg-surface text-ink hover:bg-chip-soft'

@@ -105,7 +105,7 @@ export function SettingsClient({ settings }: { settings: TenantSettings }) {
   return (
     <div>
       <p className="eyebrow">Configurações do colégio</p>
-      <h1 className="display mt-2 text-[2.5rem]">O que a IA sabe sobre a escola</h1>
+      <h1 className="display mt-2 text-[1.875rem] sm:text-[2.125rem] lg:text-[2.5rem]">O que a IA sabe sobre a escola</h1>
       <p className="mt-3 max-w-[42rem] text-[0.9375rem] leading-relaxed text-muted">
         O calendário letivo e as informações gerais abaixo entram no contexto de toda resposta.
         São o que permite ao assistente entender “a próxima prova” ou “esta etapa” sem precisar
@@ -113,7 +113,7 @@ export function SettingsClient({ settings }: { settings: TenantSettings }) {
       </p>
 
       <form action={formAction} className="mt-8 space-y-6">
-        <section className="panel p-6">
+        <section className="panel p-4 sm:p-6">
           <p className="eyebrow-muted">Ano letivo e etapas</p>
           <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-muted">
             O ano é dividido em três etapas. Estas datas definem qual etapa o assistente considera
@@ -193,7 +193,7 @@ export function SettingsClient({ settings }: { settings: TenantSettings }) {
           </div>
         </section>
 
-        <section className="panel p-6">
+        <section className="panel p-4 sm:p-6">
           <label className="field-label" htmlFor="institutionalContext">
             Informações gerais sobre o colégio
           </label>

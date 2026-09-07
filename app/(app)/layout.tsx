@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { tenants } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { Sidebar } from '@/components/sidebar';
+import { AppShell } from '@/components/app-shell';
 import { brandingStyle, logoSize } from '@/lib/branding';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -18,20 +18,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    // Altura travada na viewport: quem rola é a área de conteúdo de cada tela,
-    // e não a página. É o que mantém o campo de pergunta sempre visível numa
-    // conversa longa.
-    //
-    // `style` traz as CSS variables do tenant, sobrescrevendo os tokens do
-    // tema para toda a árvore — é assim que o Whitelabel repinta a interface.
-    <div className="flex h-screen overflow-hidden" style={brandingStyle(tenant?.branding)}>
-      <Sidebar
-        user={user}
-        logoUrl={tenant?.logoUrl}
-        logoSize={logoSize(tenant?.branding)}
-        schoolName={tenant?.displayName ?? ''}
-      />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
-    </div>
+    // A altura travada na viewport faz a área de conteúdo rolar, e não a
+    // página — é o que mantém o campo de pergunta visível numa conversa longa.
+    // `style` traz as CSS variables do tenant, que repintam toda a árvore.
+    <AppShell
+      user={user}
+      logoUrl={tenant?.logoUrl}
+      logoSize={logoSize(tenant?.branding)}
+      schoolName={tenant?.displayName ?? ''}
+      style={brandingStyle(tenant?.branding)}
+    >
+      {children}
+    </AppShell>
   );
 }
