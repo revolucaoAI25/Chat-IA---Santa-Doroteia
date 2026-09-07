@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { tenants } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { AppShell } from '@/components/app-shell';
+import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { brandingStyle, logoSize } from '@/lib/branding';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       logoSize={logoSize(tenant?.branding)}
       schoolName={tenant?.displayName ?? ''}
       style={brandingStyle(tenant?.branding)}
+      banner={<ImpersonationBanner user={user} />}
     >
       {children}
     </AppShell>

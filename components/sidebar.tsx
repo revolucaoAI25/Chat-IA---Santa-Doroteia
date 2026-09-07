@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from './logo';
-import { GearIcon, SparkleIcon, UserIcon } from './icons';
+import { DocumentIcon, GearIcon, SparkleIcon, UserIcon } from './icons';
 import { ROLE_LABELS } from '@/lib/taxonomy';
 import type { SessionUser } from '@/lib/auth/session';
 
@@ -28,6 +28,7 @@ export function Sidebar({
 
   const items: NavItem[] = [
     { href: '/chat', label: 'Assistente', icon: SparkleIcon },
+    { href: '/documentos', label: 'Documentos', icon: DocumentIcon },
     { href: '/perfil', label: 'Meu perfil', icon: UserIcon },
   ];
   if (user.role === 'admin' || user.role === 'coordenacao') {

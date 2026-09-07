@@ -1,9 +1,16 @@
 'use client';
 
 import { useActionState, useState, useTransition } from 'react';
-import { AlertIcon, CheckIcon } from '@/components/icons';
+import { AlertIcon, CheckIcon, EyeIcon, PlusIcon } from '@/components/icons';
 import { ROLE_LABELS, SEGMENTS, SEGMENT_LABELS, SERIES, serieLabel } from '@/lib/taxonomy';
-import { updateUserContext, toggleUserActive, type UserState } from '@/app/actions/users';
+import {
+  createUser,
+  updateUserContext,
+  toggleUserActive,
+  type CreateUserState,
+  type UserState,
+} from '@/app/actions/users';
+import { viewAsUser } from '@/app/actions/auth';
 import type { Role, Segment } from '@/lib/db/schema';
 
 const DISCIPLINAS = [
@@ -55,6 +62,8 @@ export function UsersClient({ users, anoLetivo }: { users: AdminUser[]; anoLetiv
         </span>
       </p>
 
+      <CreateUserForm />
+
       <div className="mt-8 space-y-3">
         {users.map((user) => (
           <UserRow
@@ -76,6 +85,173 @@ export function UsersClient({ users, anoLetivo }: { users: AdminUser[]; anoLetiv
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Cadastro de uma pessoa por vez.
+ *
+ * Fica recolhido porque a operação do dia a dia nesta tela é conferir e
+ * corrigir, não cadastrar. O volume — turmas inteiras, virada de ano — é
+ * problema do cadastro em massa, que ainda não existe.
+ */
+function CreateUserForm() {
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<Role>('aluno');
+  const [state, formAction, pending] = useActionState<CreateUserState, FormData>(createUser, {});
+
+  if (!open) {
+    return (
+      <div className="mt-6">
+        <button type="button" onClick={() => setOpen(true)} className="btn-ghost">
+          <PlusIcon className="h-4 w-4" />
+          Cadastrar pessoa
+        </button>
+        {state.created ? (
+          <p className="mt-3 flex items-center gap-1.5 text-[0.875rem] font-semibold text-success">
+            <CheckIcon className="h-4 w-4" />
+            {state.created} foi cadastrado(a).
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <form action={formAction} className="panel mt-6 p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-[1rem] font-bold text-ink">Cadastrar pessoa</h2>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="text-[0.8125rem] font-semibold text-navy underline underline-offset-2"
+        >
+          Cancelar
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className="field-label" htmlFor="novo-nome">
+            Nome completo
+          </label>
+          <input id="novo-nome" name="name" required maxLength={120} className="field" />
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="novo-perfil">
+            Perfil
+          </label>
+          <select
+            id="novo-perfil"
+            name="role"
+            value={role}
+            onChange={(event) => setRole(event.target.value as Role)}
+            className="field"
+          >
+            <option value="aluno">{ROLE_LABELS.aluno}</option>
+            <option value="professor">{ROLE_LABELS.professor}</option>
+            <option value="coordenacao">{ROLE_LABELS.coordenacao}</option>
+            <option value="admin">{ROLE_LABELS.admin}</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="nova-matricula">
+            Matrícula (é o login)
+          </label>
+          <input
+            id="nova-matricula"
+            name="matricula"
+            required
+            maxLength={30}
+            placeholder="2026074"
+            className="field uppercase"
+          />
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="novo-email">
+            E-mail
+          </label>
+          <input id="novo-email" name="email" type="email" required className="field" />
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="nova-senha">
+            Senha provisória
+          </label>
+          <input
+            id="nova-senha"
+            name="password"
+            type="text"
+            required
+            minLength={8}
+            className="field"
+          />
+          <p className="mt-1.5 text-[0.75rem] leading-snug text-muted">
+            Mínimo de 8 caracteres. Ainda não existe tela de troca de senha — anote e entregue
+            à pessoa.
+          </p>
+        </div>
+
+        {role === 'aluno' ? (
+          <>
+            <div>
+              <label className="field-label" htmlFor="nova-serie">
+                Série
+              </label>
+              <select id="nova-serie" name="serie" className="field">
+                <option value="">Sem série</option>
+                {SERIES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[0.75rem] leading-snug text-muted">
+                Recorta quais documentos este acesso enxerga, inclusive na busca da IA.
+              </p>
+            </div>
+
+            <div>
+              <label className="field-label" htmlFor="nova-turma">
+                Turma
+              </label>
+              <input
+                id="nova-turma"
+                name="turma"
+                maxLength={10}
+                placeholder="7A"
+                className="field"
+              />
+            </div>
+          </>
+        ) : (
+          <p className="self-end text-[0.75rem] leading-relaxed text-muted sm:col-span-1">
+            Disciplinas e séries em que dá aula são definidas depois, no botão{' '}
+            <strong className="text-ink">Editar</strong> da linha.
+          </p>
+        )}
+      </div>
+
+      {state.error ? (
+        <p role="alert" className="mt-4 text-[0.875rem] font-medium text-danger">
+          {state.error}
+        </p>
+      ) : state.created && !pending ? (
+        // O formulário continua aberto e limpo: cadastrar uma turma é cadastrar
+        // várias pessoas seguidas, e reabrir a cada uma seria trabalho à toa.
+        <p className="mt-4 flex items-center gap-1.5 text-[0.875rem] font-semibold text-success">
+          <CheckIcon className="h-4 w-4" />
+          {state.created} foi cadastrado(a). Pode cadastrar a próxima pessoa.
+        </p>
+      ) : null}
+
+      <button type="submit" className="btn-primary mt-5" disabled={pending}>
+        {pending ? 'Cadastrando…' : 'Cadastrar'}
+      </button>
+    </form>
   );
 }
 
@@ -134,6 +310,19 @@ function UserRow({
               <CheckIcon className="h-3.5 w-3.5" />
               Salvo
             </span>
+          ) : null}
+          {/* Só aluno e professor: entrar como outro administrador não
+              conferiria recorte de acesso nenhum. */}
+          {user.active && (user.role === 'aluno' || user.role === 'professor') ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => startTransition(() => void viewAsUser(user.id))}
+              className="flex items-center gap-1.5 rounded-full border border-line-strong px-4 py-1.5 text-[0.8125rem] font-semibold text-ink transition-colors hover:bg-chip-soft disabled:opacity-50"
+            >
+              <EyeIcon className="h-4 w-4" />
+              Ver como
+            </button>
           ) : null}
           <button type="button" onClick={onToggle} className="btn-ghost px-4 py-1.5 text-[0.8125rem]">
             {open ? 'Fechar' : 'Editar'}

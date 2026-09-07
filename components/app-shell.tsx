@@ -27,6 +27,7 @@ export function AppShell({
   logoSize,
   schoolName,
   style,
+  banner,
   children,
 }: {
   user: SessionUser;
@@ -35,6 +36,8 @@ export function AppShell({
   schoolName?: string;
   /** CSS variables da identidade visual do tenant. */
   style?: React.CSSProperties;
+  /** Faixa fixa acima de tudo — hoje, o aviso de "vendo como". */
+  banner?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -68,38 +71,44 @@ export function AppShell({
 
   return (
     <DrawerContext.Provider value={{ open: () => setOpen(true) }}>
-      <div className="flex h-screen overflow-hidden" style={style}>
-        {/* Fixa no desktop */}
-        <div className="hidden lg:flex">{sidebar}</div>
+      <div className="flex h-screen flex-col overflow-hidden" style={style}>
+        {/* Acima de tudo, inclusive da barra lateral: é um estado da sessão
+            inteira, não de uma tela. */}
+        {banner}
 
-        {/* Gaveta no celular e no tablet */}
-        {/*
-          `inert` (e não só `pointer-events-none`) porque o mouse não é o único
-          jeito de chegar num link: sem isto, o Tab entraria na gaveta fechada e
-          o foco sumiria fora da tela.
-        */}
-        <div
-          className={`fixed inset-0 z-40 lg:hidden ${open ? '' : 'pointer-events-none'}`}
-          inert={!open}
-        >
-          <button
-            type="button"
-            aria-label="Fechar menu"
-            onClick={() => setOpen(false)}
-            className={`absolute inset-0 bg-ink/40 transition-opacity duration-200 ${
-              open ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
+        <div className="flex min-h-0 flex-1">
+          {/* Fixa no desktop */}
+          <div className="hidden lg:flex">{sidebar}</div>
+
+          {/* Gaveta no celular e no tablet */}
+          {/*
+            `inert` (e não só `pointer-events-none`) porque o mouse não é o único
+            jeito de chegar num link: sem isto, o Tab entraria na gaveta fechada e
+            o foco sumiria fora da tela.
+          */}
           <div
-            className={`absolute inset-y-0 left-0 flex shadow-xl transition-transform duration-200 ${
-              open ? 'translate-x-0' : '-translate-x-full'
-            }`}
+            className={`fixed inset-0 z-40 lg:hidden ${open ? '' : 'pointer-events-none'}`}
+            inert={!open}
           >
-            {sidebar}
+            <button
+              type="button"
+              aria-label="Fechar menu"
+              onClick={() => setOpen(false)}
+              className={`absolute inset-0 bg-ink/40 transition-opacity duration-200 ${
+                open ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+            <div
+              className={`absolute inset-y-0 left-0 flex shadow-xl transition-transform duration-200 ${
+                open ? 'translate-x-0' : '-translate-x-full'
+              }`}
+            >
+              {sidebar}
+            </div>
           </div>
-        </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+        </div>
       </div>
     </DrawerContext.Provider>
   );

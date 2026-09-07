@@ -27,6 +27,14 @@ interface Citation {
 /** Chave da thread na aba. */
 const CONVERSATION_KEY = 'sd_conversation';
 
+/**
+ * Teto da caixa de pergunta, em pixels (~7 linhas).
+ *
+ * Existe teto porque sem ele um texto longo colado empurraria a conversa toda
+ * para fora da tela. Passando daqui, a caixa para de crescer e rola por dentro.
+ */
+const MAX_COMPOSER_PX = 176;
+
 function rememberConversation(id: string | null) {
   try {
     if (id) sessionStorage.setItem(CONVERSATION_KEY, id);
@@ -140,6 +148,24 @@ export function ChatClient({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [items]);
+
+  /*
+   * A caixa acompanha o texto.
+   *
+   * Depende de `input` (e não do evento de digitação) para também encolher
+   * quando a pergunta é enviada e o campo esvazia — ou quando o texto chega
+   * pronto, vindo de um clique numa sugestão.
+   */
+  useEffect(() => {
+    const field = textareaRef.current;
+    if (!field) return;
+
+    // Zerar antes de medir: `scrollHeight` nunca diminui sozinho enquanto a
+    // altura explícita anterior continuar valendo.
+    field.style.height = 'auto';
+    field.style.height = `${Math.min(field.scrollHeight, MAX_COMPOSER_PX)}px`;
+    field.style.overflowY = field.scrollHeight > MAX_COMPOSER_PX ? 'auto' : 'hidden';
+  }, [input]);
 
   const send = useCallback(
     async (question: string) => {
@@ -482,16 +508,24 @@ export function ChatClient({
         </div>
       </div>
 
-      <div className="border-t border-line bg-header">
-        <div className="mx-auto w-full max-w-[52rem] px-4 py-4 sm:px-6 lg:px-10 lg:py-5">
+      {/*
+        A caixa de pergunta é uma caixa, não uma faixa: fica dentro da mesma
+        coluna do conteúdo, sem borda atravessando a tela inteira. Ela começa com
+        uma linha de altura e cresce com o texto até o teto de `MAX_COMPOSER_PX`,
+        em vez de reservar duas linhas o tempo todo — numa tela de celular
+        aquelas duas linhas fixas, mais rótulo e legenda, comiam quase um terço
+        da altura útil do chat.
+      */}
+      <div className="shrink-0 bg-bg">
+        <div className="mx-auto w-full max-w-[52rem] px-4 pb-3 sm:px-6 lg:px-10 lg:pb-4">
           <form
             onSubmit={(event) => {
               event.preventDefault();
               void send(input);
             }}
-            className="card p-4 focus-within:border-navy/50 focus-within:shadow-[0_0_0_3px_rgb(15_59_133_/_0.10)]"
+            className="flex items-end gap-2 rounded-3xl border border-line bg-surface py-1.5 pl-4 pr-1.5 shadow-[0_1px_2px_rgb(16_23_19_/_0.04)] transition-colors focus-within:border-navy/50 focus-within:shadow-[0_0_0_3px_rgb(15_59_133_/_0.10)]"
           >
-            <label className="field-label" htmlFor="question">
+            <label className="sr-only" htmlFor="question">
               Sua pergunta
             </label>
             <textarea
@@ -505,30 +539,32 @@ export function ChatClient({
                   void send(input);
                 }
               }}
-              rows={2}
+              rows={1}
               maxLength={2000}
-              placeholder="Pergunte sobre provas, comunicados, eventos…"
-              className="w-full resize-none bg-transparent text-[0.9375rem] leading-relaxed text-ink outline-none placeholder:text-[#9a9d98]"
+              // Curto de propósito: num celular de 390px um texto mais longo
+              // quebra em duas linhas, e a caixa nasce alta pelo texto de
+              // exemplo, não pela pergunta.
+              placeholder="Pergunte sobre os documentos…"
+              style={{ maxHeight: MAX_COMPOSER_PX }}
+              className="flex-1 resize-none self-center bg-transparent py-2 text-[0.9375rem] leading-relaxed text-ink outline-none placeholder:text-[#9a9d98]"
             />
-            <div className="mt-2 flex items-end justify-between gap-4">
-              <p className="text-[0.75rem] text-muted">
-                <strong className="font-semibold text-ink">Enter</strong> para enviar{' '}
-                <span aria-hidden="true" className="mx-1.5 text-muted">·</span>
-                <strong className="font-semibold text-ink">Shift + Enter</strong> para nova linha
-              </p>
-              <button
-                type="submit"
-                disabled={busy || input.trim().length === 0}
-                aria-label="Enviar pergunta"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white transition-colors hover:bg-navy-hover disabled:bg-navy-muted"
-              >
-                <ArrowUpIcon className="h-5 w-5" />
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={busy || input.trim().length === 0}
+              aria-label="Enviar pergunta"
+              className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white transition-colors hover:bg-navy-hover disabled:bg-navy-muted"
+            >
+              <ArrowUpIcon className="h-[1.125rem] w-[1.125rem]" />
+            </button>
           </form>
 
-          <p className="mt-2.5 text-center text-[0.75rem] text-muted">
-            As respostas usam apenas os documentos oficiais que o seu perfil pode consultar.
+          <p className="mt-2 text-center text-[0.6875rem] leading-snug text-muted">
+            <span className="hidden sm:inline">
+              <strong className="font-semibold text-ink">Enter</strong> envia,{' '}
+              <strong className="font-semibold text-ink">Shift + Enter</strong> quebra a linha
+              <span aria-hidden="true" className="mx-1.5">·</span>
+            </span>
+            Só documentos oficiais que o seu perfil pode consultar.
           </p>
         </div>
       </div>

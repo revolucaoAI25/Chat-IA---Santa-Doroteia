@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
-import { clearSessionCookie, setSessionCookie } from '@/lib/auth/session';
+import { clearSessionCookie, isAdmin, requireSession, setSessionCookie } from '@/lib/auth/session';
 import { demoLoginEnabled } from '@/lib/auth/demo';
 
 export interface LoginState {
@@ -48,6 +48,45 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
 export async function logout(): Promise<void> {
   await clearSessionCookie();
   redirect('/login');
+}
+
+/**
+ * Vê o sistema pelos olhos de um aluno ou professor.
+ *
+ * Sem isto não há como conferir o que a plataforma promete: que a série recorta
+ * o acervo e que a IA fala diferente com cada perfil. Criar um usuário de teste
+ * e sair e entrar de novo a cada verificação funcionaria, mas ninguém faz —
+ * e o que não se confere, não se descobre errado.
+ *
+ * O alvo é limitado a aluno e professor de propósito. Entrar como outro
+ * administrador não serve para conferir recorte nenhum, e transformaria isto
+ * numa forma de assumir um acesso administrativo alheio.
+ */
+export async function viewAsUser(userId: string): Promise<void> {
+  const actor = await requireSession();
+  if (!isAdmin(actor)) throw new Error('Sem permissão.');
+
+  // Enquanto já está vendo como outra pessoa, `actor` é essa pessoa e não passa
+  // no teste acima — então não existe visita aninhada, nem volta ambígua.
+  const target = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!target || target.tenantId !== actor.tenantId || !target.active) {
+    throw new Error('Usuário não encontrado.');
+  }
+  if (target.role !== 'aluno' && target.role !== 'professor') {
+    throw new Error('Só é possível ver como aluno ou professor.');
+  }
+
+  await setSessionCookie(target.id, actor.id);
+  redirect('/chat');
+}
+
+/** Volta para o próprio acesso do administrador. */
+export async function stopViewingAs(): Promise<void> {
+  const session = await requireSession();
+  if (!session.impersonator) redirect('/chat');
+
+  await setSessionCookie(session.impersonator.id);
+  redirect('/admin?tab=usuarios');
 }
 
 /**

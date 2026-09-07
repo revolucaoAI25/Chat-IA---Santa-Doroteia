@@ -29,7 +29,10 @@ OCR, extração automática de datas e controle de acesso por perfil de verdade.
 | Reescrita de pergunta (resolve "e a de história?") | ✅ |
 | Pergunta de esclarecimento quando — e só quando — é ambíguo | ✅ |
 | Agenda estruturada injetada nas perguntas de data | ✅ |
+| Tela de Documentos: o acervo visível ao perfil, com busca e filtro por tipo | ✅ |
 | Contexto do usuário mantido pela secretaria (tela de Usuários) | ✅ |
+| Cadastro de usuários pelo painel (nome, matrícula, papel, série, senha) | ✅ |
+| "Ver como": o administrador confere a tela pelos olhos de um aluno ou professor | ✅ |
 | Série avança sozinha na virada do ano letivo | ✅ |
 | Data e etapa (trimestre) vigentes no contexto da IA | ✅ |
 | Calendário letivo e contexto institucional editáveis pelo admin | ✅ |
@@ -38,8 +41,8 @@ OCR, extração automática de datas e controle de acesso por perfil de verdade.
 | Limite de perguntas por usuário | ✅ |
 
 Fora do escopo desta entrega (mas com o banco e a arquitetura já preparados):
-telas de Documentos e Calendário, sincronização com Google Drive, automação de
-lembretes por e-mail, relatórios e o
+tela de Calendário, sincronização com Google Drive, automação de
+lembretes por e-mail, relatórios, troca de senha pelo próprio usuário e o
 [cadastro em massa de usuários](./docs/cadastro-em-massa.md) — este último já
 com o plano de implementação escrito.
 

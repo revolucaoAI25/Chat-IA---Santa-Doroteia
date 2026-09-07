@@ -289,14 +289,38 @@ Com o administrador criado, tudo o mais é pela interface:
 2. **Administração → Whitelabel**
    Suba o logo oficial e ajuste as cores.
 
-3. **Administração → Usuários**
-   Por ora, cadastre manualmente alguns usuários de teste. O cadastro em massa
-   por planilha está no plano (ver README).
+3. **Administração → Usuários** → **Cadastrar pessoa**
+   Cadastre pelo menos um aluno e um professor — sem eles não há como conferir
+   o recorte de acesso. Anote a senha provisória: ainda não existe tela de troca
+   de senha, então é você quem a entrega. O cadastro em massa por planilha está
+   no plano (ver README).
 
 4. **Administração → Ingestão**
    Suba os PDFs. Para testar antes do acervo real, use os dez documentos
    fictícios em [`documentos-exemplo/`](./documentos-exemplo/) — o README de lá
    diz o que perguntar depois.
+
+---
+
+## Testando como aluno e como professor
+
+Na linha de cada aluno ou professor, em **Administração → Usuários**, há o botão
+**Ver como**. Ele troca a sua sessão para a daquela pessoa: mesmo recorte de
+documentos, mesmas sugestões, mesmo contexto no prompt. Uma faixa azul fica no
+topo da tela o tempo todo, com **Voltar ao meu acesso**.
+
+Enquanto está vendo como outra pessoa, o menu **Administração** desaparece — é
+a mesma verificação de papel que vale para qualquer aluno, aplicada a você. Não
+dá para entrar como outro administrador, só como aluno ou professor.
+
+O que vale a pena conferir nessa visão:
+
+- **Documentos** mostra menos itens para um aluno do que para um professor, e
+  nenhum documento restrito ao corpo docente.
+- A mesma pergunta feita como aluno e como professor deve receber respostas
+  diferentes, citando documentos diferentes.
+- Perguntar por um documento que o perfil não pode ver deve resultar em "não
+  encontrei", nunca no conteúdo.
 
 ---
 

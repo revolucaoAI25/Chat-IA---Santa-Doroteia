@@ -35,6 +35,13 @@ export interface SessionUser {
 
   /** Concluiu o Ensino Médio pelo avanço automático; cadastro pede atenção. */
   concluido: boolean;
+
+  /**
+   * Preenchido quando um administrador está vendo o sistema pelos olhos desta
+   * pessoa. Tudo o mais na sessão é do usuário visitado — papel, série, acesso —
+   * porque é justamente isso que se quer conferir.
+   */
+  impersonator?: { id: string; name: string };
 }
 
 function secretKey(): Uint8Array {
@@ -55,8 +62,14 @@ function secretKey(): Uint8Array {
  * série de um aluno passa a valer na hora — em vez de continuar valendo o que
  * estava no token por até 8 horas.
  */
-export async function setSessionCookie(userId: string): Promise<void> {
-  const token = await new SignJWT({ uid: userId })
+export async function setSessionCookie(
+  userId: string,
+  /** Administrador que está "vendo como" — vai no token para o retorno ser possível. */
+  impersonatorId?: string,
+): Promise<void> {
+  const token = await new SignJWT(
+    impersonatorId ? { uid: userId, imp: impersonatorId } : { uid: userId },
+  )
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${MAX_AGE_SECONDS}s`)
@@ -89,9 +102,11 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
   if (!token) return null;
 
   let userId: string;
+  let impersonatorId = '';
   try {
     const { payload } = await jwtVerify(token, secretKey());
     userId = String(payload.uid ?? '');
+    impersonatorId = payload.imp ? String(payload.imp) : '';
     if (!userId) return null;
   } catch {
     return null;
@@ -99,6 +114,27 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
 
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
   if (!user || !user.active) return null;
+
+  /*
+   * "Ver como" é revalidado a cada requisição, não confiado ao token.
+   *
+   * O token é assinado, então `imp` não pode ser forjado — mas pode envelhecer:
+   * o administrador que iniciou a visita pode ter sido desativado ou rebaixado
+   * nesse meio-tempo. Quando isso acontece, a sessão inteira cai, e não só a
+   * faixa de aviso: continuar navegando como outra pessoa sem ninguém
+   * autorizado por trás é exatamente o que não pode acontecer.
+   */
+  let impersonator: SessionUser['impersonator'];
+  if (impersonatorId) {
+    const admin = await db.query.users.findFirst({ where: eq(users.id, impersonatorId) });
+    const allowed =
+      admin &&
+      admin.active &&
+      admin.tenantId === user.tenantId &&
+      (admin.role === 'admin' || admin.role === 'coordenacao');
+    if (!allowed) return null;
+    impersonator = { id: admin.id, name: admin.name };
+  }
 
   // A série vigente é derivada da data, não lida crua do banco: o cadastro
   // guarda "7º ano em 2026" e o ano seguinte responde 8º ano sozinho.
@@ -119,6 +155,7 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
     seriesTaught: user.seriesTaught,
     segmentsTaught: user.segmentsTaught,
     concluido: effective.concluido,
+    impersonator,
   };
 });
 

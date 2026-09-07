@@ -37,11 +37,20 @@ export function CalendarIcon({ className }: Props) {
   );
 }
 
+/**
+ * Engrenagem de oito dentes.
+ *
+ * O contorno é calculado, não desenhado à mão: cada dente ocupa o mesmo arco
+ * (±9° na ponta, ±15,5° na raiz) sobre os raios 8 e 6,1, a cada 45°. O desenho
+ * anterior era um polígono de doze vértices com dentes de tamanhos diferentes e,
+ * a 20px, lia como uma estrela amassada — que é o "desformatado" que se via no
+ * menu.
+ */
 export function GearIcon({ className }: Props) {
   return (
     <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
+      <path d="M8.37 4.12 L8.75 2.1 A8 8 0 0 1 11.25 2.1 L11.63 4.12 A6.1 6.1 0 0 1 13 4.69 L14.7 3.53 A8 8 0 0 1 16.47 5.3 L15.31 7 A6.1 6.1 0 0 1 15.88 8.37 L17.9 8.75 A8 8 0 0 1 17.9 11.25 L15.88 11.63 A6.1 6.1 0 0 1 15.31 13 L16.47 14.7 A8 8 0 0 1 14.7 16.47 L13 15.31 A6.1 6.1 0 0 1 11.63 15.88 L11.25 17.9 A8 8 0 0 1 8.75 17.9 L8.37 15.88 A6.1 6.1 0 0 1 7 15.31 L5.3 16.47 A8 8 0 0 1 3.53 14.7 L4.69 13 A6.1 6.1 0 0 1 4.12 11.63 L2.1 11.25 A8 8 0 0 1 2.1 8.75 L4.12 8.37 A6.1 6.1 0 0 1 4.69 7 L3.53 5.3 A8 8 0 0 1 5.3 3.53 L7 4.69 Z" />
       <circle cx="10" cy="10" r="2.6" />
-      <path d="M10 1.9l1 2.1 2.3-.5.6 2.3 2.2 1-1.2 2 1.2 2-2.2 1-.6 2.3-2.3-.5-1 2.1-1-2.1-2.3.5-.6-2.3-2.2-1 1.2-2-1.2-2 2.2-1 .6-2.3 2.3.5 1-2.1Z" />
     </svg>
   );
 }
@@ -119,6 +128,32 @@ export function ThumbDownIcon({ className }: Props) {
     <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
       <path d="M13.8 2.6v8.8l-3.4 6a1.7 1.7 0 0 1-2.4-1.9l.8-3.3H4.9a1.7 1.7 0 0 1-1.6-2.1l1.4-5.6a1.7 1.7 0 0 1 1.6-1.3h7.5Z" />
       <path d="M13.8 11.4h3.3V2.6h-3.3" />
+    </svg>
+  );
+}
+
+export function SearchIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
+      <circle cx="8.8" cy="8.8" r="5.3" />
+      <path d="m12.7 12.7 4 4" />
+    </svg>
+  );
+}
+
+export function EyeIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
+      <path d="M1.9 10S4.9 4.6 10 4.6 18.1 10 18.1 10 15.1 15.4 10 15.4 1.9 10 1.9 10Z" />
+      <circle cx="10" cy="10" r="2.4" />
+    </svg>
+  );
+}
+
+export function PlusIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base} strokeWidth={2}>
+      <path d="M10 4.4v11.2M4.4 10h11.2" />
     </svg>
   );
 }
