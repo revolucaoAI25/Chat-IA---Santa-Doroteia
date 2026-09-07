@@ -24,6 +24,18 @@ interface Citation {
   excerpt: string;
 }
 
+/** Chave da thread na aba. */
+const CONVERSATION_KEY = 'sd_conversation';
+
+function rememberConversation(id: string | null) {
+  try {
+    if (id) sessionStorage.setItem(CONVERSATION_KEY, id);
+    else sessionStorage.removeItem(CONVERSATION_KEY);
+  } catch {
+    // Sem sessionStorage, a thread simplesmente não sobrevive à navegação.
+  }
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -49,7 +61,77 @@ export function ChatClient({
   const [items, setItems] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+
+  /*
+   * A thread vive na aba.
+   *
+   * `sessionStorage` sobrevive a ir ao perfil e voltar, ou a um F5 acidental —
+   * a conversa continua de onde parou. Mas morre ao fechar a aba, que é o
+   * "sair da página" esperado. O servidor ainda aposenta a thread depois de um
+   * tempo sem interação, então uma aba deixada aberta a noite toda também
+   * recomeça.
+   */
   const [conversationId, setConversationId] = useState<string | null>(null);
+
+  const [restoring, setRestoring] = useState(true);
+
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(CONVERSATION_KEY);
+    } catch {
+      // Modo privado ou cookies bloqueados: a conversa só não sobrevive à
+      // navegação, o que é degradação aceitável.
+    }
+
+    if (!stored) {
+      setRestoring(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    // Retoma a thread com as mensagens na tela. Sem isto, o servidor
+    // continuaria a conversa mas o usuário veria um chat vazio.
+    fetch(`/api/conversation?id=${stored}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (cancelled) return;
+
+        if (!payload || payload.expired || payload.messages.length === 0) {
+          rememberConversation(null);
+          return;
+        }
+
+        setConversationId(stored);
+        setItems(
+          payload.messages.map(
+            (m: {
+              id: string;
+              role: 'user' | 'assistant';
+              content: string;
+              citations: Citation[];
+              feedback: 'util' | 'nao_util' | null;
+            }) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              citations: m.citations ?? [],
+              messageId: m.role === 'assistant' ? m.id : undefined,
+              feedback: m.feedback ?? undefined,
+            }),
+          ),
+        );
+      })
+      .catch(() => rememberConversation(null))
+      .finally(() => {
+        if (!cancelled) setRestoring(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -111,7 +193,10 @@ export function ChatClient({
             const event = JSON.parse(line);
 
             if (event.type === 'start') {
+              // O servidor pode ter aberto outra thread (inatividade), então
+              // quem manda é o id que voltou, não o que enviamos.
               setConversationId(event.conversationId);
+              rememberConversation(event.conversationId);
             } else if (event.type === 'delta') {
               answer += event.text;
               patch({ content: answer, pending: false });
@@ -144,6 +229,7 @@ export function ChatClient({
   const startOver = () => {
     setItems([]);
     setConversationId(null);
+    rememberConversation(null);
     setInput('');
     textareaRef.current?.focus();
   };
@@ -176,7 +262,9 @@ export function ChatClient({
     element?.focus({ preventScroll: true });
   };
 
-  const empty = items.length === 0;
+  // Enquanto restaura, não mostramos nem as sugestões nem a conversa: exibir
+  // o estado vazio e trocá-lo meio segundo depois pisca a tela.
+  const empty = items.length === 0 && !restoring;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

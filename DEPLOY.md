@@ -1,164 +1,263 @@
-# Como conectar ao Supabase e à Vercel
+# Publicar no Supabase + Vercel
 
-Passo a passo, na ordem. Leva ~20 minutos na primeira vez.
+**Você não precisa instalar nada no seu computador.** Tudo é feito pelo
+navegador: dois sites, um repositório no GitHub e uma chamada final que a
+própria aplicação executa.
+
+Leva cerca de 25 minutos na primeira vez. Faça na ordem — a Parte 2 usa dados
+que você copia na Parte 1.
 
 ---
 
-## Parte 1 — Supabase (banco + arquivos)
+## Visão geral
+
+```
+1. Supabase  →  cria o banco e o bucket, e você copia 4 valores
+2. Vercel    →  importa o repositório e cola esses valores
+3. Instalação →  uma chamada cria as tabelas e o seu usuário administrador
+4. Fechar    →  remove a chave de instalação
+```
+
+---
+
+## Parte 1 — Supabase (o banco e os arquivos)
 
 ### 1.1 Criar o projeto
 
-1. Entre em <https://supabase.com> e crie uma conta (o plano gratuito já roda o protótipo).
-2. **New project**. Preencha:
+1. Acesse <https://supabase.com> e crie uma conta.
+2. Clique em **New project** e preencha:
    - **Name**: `santa-doroteia`
-   - **Database Password**: gere uma senha forte e **guarde** — ela aparece na string de conexão e o Supabase não mostra de novo.
-   - **Region**: `South America (São Paulo)` — é a mais próxima do colégio e corta ~150 ms de latência por consulta.
-3. Aguarde o provisionamento (~2 min).
+   - **Database Password**: gere uma senha forte e **guarde num lugar seguro**.
+     Ela aparece dentro do endereço de conexão e o Supabase não mostra de novo.
+   - **Region**: `South America (São Paulo)` — a mais próxima do colégio.
+3. Clique em **Create new project** e espere terminar (uns 2 minutos).
 
-### 1.2 Ligar a extensão pgvector
-
-O `npm run db:migrate` já roda `CREATE EXTENSION vector`, mas o Supabase pede que ela esteja habilitada no projeto:
+### 1.2 Ligar a extensão de busca vetorial
 
 1. Menu lateral → **Database** → **Extensions**.
-2. Busque `vector` e ative.
+2. Procure por `vector` e ative.
 
-### 1.3 Pegar as duas strings de conexão
+> É a extensão que permite a busca por significado. Sem ela, a instalação falha
+> na Parte 3.
 
-Menu lateral → **Project Settings** → **Database** → seção **Connection string**.
+### 1.3 Copiar os dois endereços de conexão
 
-Você precisa de **duas**, e a diferença importa:
+Menu lateral → **Project Settings** (a engrenagem) → **Database**.
 
-| Uso | Qual pegar | Porta |
+Na seção **Connection string**, você precisa de **dois** endereços diferentes.
+Anote os dois:
+
+| Onde aparece | Como vou chamar | Porta |
 |---|---|---|
-| Migrações e seed (da sua máquina) | **Direct connection** | `5432` |
-| Aplicação na Vercel | **Transaction pooler** | `6543` |
+| **Transaction pooler** | endereço do dia a dia | `6543` |
+| **Direct connection** | endereço de instalação | `5432` |
 
-O motivo: funções serverless abrem e fecham conexões o tempo todo e esgotariam o Postgres; o pooler resolve isso, mas não suporta *prepared statements*. O código detecta a porta `6543` e desliga esse recurso sozinho — por isso basta usar a string certa em cada lugar.
+Em ambos, troque `[YOUR-PASSWORD]` pela senha do passo 1.1.
 
-Substitua `[YOUR-PASSWORD]` pela senha do passo 1.1.
+> **Por que dois?** O endereço do dia a dia aguenta muita gente ao mesmo tempo,
+> mas não serve para criar tabelas. O de instalação faz o contrário. A aplicação
+> usa cada um no seu momento.
 
-### 1.4 Criar o bucket de arquivos
+### 1.4 Criar o bucket dos arquivos
 
 1. Menu lateral → **Storage** → **New bucket**.
-2. Nome: `documentos`. Deixe **Private** (o app serve os arquivos por rota autenticada; bucket público vazaria os PDFs).
-3. **Save**.
+2. Nome: `documentos`.
+3. Deixe **Private** (não marque "Public bucket"). A aplicação serve os PDFs por
+   uma rota que confere quem está pedindo; um bucket público deixaria qualquer
+   pessoa com o link baixar o arquivo.
+4. **Save**.
 
-### 1.5 Pegar as chaves da API
+### 1.5 Copiar as chaves de acesso
 
-**Project Settings** → **API Keys**:
+**Project Settings** → **API Keys**. Anote:
 
-- **Project URL** → vira `SUPABASE_URL`
-- **service_role** (em *Secret keys*) → vira `SUPABASE_SERVICE_ROLE_KEY`
+- **Project URL** — algo como `https://xxxxx.supabase.co`
+- **service_role** (na seção *Secret keys*) — uma chave longa começando com `eyJ`
 
-> A `service_role` ignora RLS e vale como acesso total ao banco. Ela só pode existir em variável de ambiente do servidor — nunca no código, nunca em variável `NEXT_PUBLIC_*`, nunca no navegador.
-
-### 1.6 Rodar as migrações e o seed
-
-Da sua máquina, com a **conexão direta** (5432):
-
-```bash
-cp .env.example .env.local
-```
-
-Preencha no `.env.local`:
-
-```bash
-DATABASE_URL=postgresql://postgres:SUA_SENHA@db.xxxxx.supabase.co:5432/postgres
-SESSION_SECRET=<cole o resultado de: openssl rand -base64 32>
-OPENAI_API_KEY=sk-...
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
-```
-
-Depois:
-
-```bash
-npm install
-npm run db:migrate      # cria tabelas, extensão e índices
-npm run db:seed         # cria usuários e o acervo de demonstração
-npx tsx scripts/verify.ts   # confere o controle de acesso
-```
-
-Se `verify.ts` terminar com "Todas as verificações passaram", o banco está pronto.
+> ⚠️ A `service_role` dá acesso total ao banco. Ela só pode ser colada nas
+> variáveis de ambiente da Vercel. Nunca num e-mail, nunca no código.
 
 ---
 
-## Parte 2 — Vercel (aplicação)
+## Parte 2 — Vercel (a aplicação)
 
-### 2.1 Subir o código para o GitHub
+### 2.1 Importar o projeto
 
-O repositório já está em `revolucaoAI25/Chat-IA---Santa-Doroteia`, na branch de desenvolvimento. Faça o merge para a branch principal quando quiser publicar.
+1. Acesse <https://vercel.com> e entre com a conta do GitHub.
+2. **Add New** → **Project**.
+3. Escolha o repositório `Chat-IA---Santa-Doroteia`.
+4. Em **Branch**, selecione a branch onde está o código.
+5. A Vercel reconhece o Next.js sozinha — **não altere** Build Command nem
+   Output Directory.
 
-### 2.2 Importar na Vercel
+**Ainda não clique em Deploy.** Configure as variáveis primeiro; sem elas o
+build falha.
 
-1. Entre em <https://vercel.com> com a conta do GitHub.
-2. **Add New** → **Project** → selecione o repositório.
-3. A Vercel detecta Next.js sozinha. **Não mude** Build Command nem Output Directory.
-4. **Não clique em Deploy ainda** — configure as variáveis primeiro (o build falha sem `DATABASE_URL`).
+### 2.2 Colar as variáveis de ambiente
 
-### 2.3 Variáveis de ambiente
+Na mesma tela de importação, abra **Environment Variables** e adicione uma por
+uma. Marque as três caixas (Production, Preview, Development) em todas.
 
-Ainda na tela de import, abra **Environment Variables** e adicione:
+**Obrigatórias:**
 
-| Nome | Valor | Observação |
-|---|---|---|
-| `DATABASE_URL` | string do **Transaction pooler** | porta **6543**, não 5432 |
-| `SESSION_SECRET` | `openssl rand -base64 32` | pode ser diferente da local |
-| `OPENAI_API_KEY` | sua chave | |
-| `SUPABASE_URL` | Project URL | |
-| `SUPABASE_SERVICE_ROLE_KEY` | chave service_role | |
-| `SUPABASE_STORAGE_BUCKET` | `documentos` | |
-| `DEFAULT_RETENTION_MONTHS` | `12` | |
-
-**Não** defina `ENABLE_DEMO_LOGIN`. Ausente, o acesso rápido sem senha fica desligado em produção — que é o comportamento correto.
-
-Marque as três caixas (Production, Preview, Development) em cada variável.
-
-### 2.4 Deploy
-
-Clique em **Deploy**. O primeiro build leva ~2 minutos. No fim você recebe uma URL `*.vercel.app`.
-
-### 2.5 Escolher o plano
-
-O **Hobby** (grátis) funciona para demonstrar, com uma limitação real: funções serverless têm teto de **60 segundos**. A ingestão faz OCR e classificação dentro da requisição e pede até 300 s (`maxDuration` em `app/api/ingest/route.ts`), então **PDFs grandes ou digitalizados vão estourar o tempo no Hobby**.
-
-O **Pro** (US$ 20/mês) libera os 300 s e resolve para o uso normal. Para carregar os 430 PDFs do acervo histórico de uma vez, o certo mesmo é mover a ingestão para uma fila — veja "Antes de ir para produção" no README.
-
-### 2.6 Domínio próprio
-
-**Project Settings** → **Domains** → **Add**. Aponte no seu provedor de DNS:
-
-- subdomínio (`assistente.santadoroteia.com.br`): registro `CNAME` para `cname.vercel-dns.com`
-- domínio raiz: registro `A` para o IP que a Vercel indicar na tela
-
-O HTTPS é emitido automaticamente depois que o DNS propaga.
-
----
-
-## Parte 3 — Conferir que subiu certo
-
-1. Abra a URL e confirme que a tela de login aparece **sem** os cartões de acesso rápido (prova de que o modo demonstração está desligado).
-2. Entre com `ADM001` e a senha do seed.
-3. **Administração → Ingestão**: suba um PDF de verdade e veja a classificação.
-4. **Assistente**: pergunte algo sobre esse documento e confira a citação.
-5. **Administração → Whitelabel**: suba o logo oficial e ajuste as cores.
-
-### Se algo falhar
-
-| Sintoma | Causa provável |
+| Nome | O que colar |
 |---|---|
-| `DATABASE_URL não está definida` no build | Variável não foi marcada para o ambiente **Production** |
-| `password authentication failed` | A senha na string ainda está como `[YOUR-PASSWORD]` |
-| `type "vector" does not exist` | Extensão não habilitada (passo 1.2) ou migração rodada no pooler em vez da conexão direta |
-| Ingestão dá timeout | Plano Hobby (teto de 60 s) — veja 2.5 |
-| Logo não aparece | `SUPABASE_URL`/`SERVICE_ROLE_KEY` ausentes: sem elas o app grava em disco local, que na Vercel é somente leitura |
-| Erro de conexão intermitente sob carga | `DATABASE_URL` está na porta 5432; troque pelo pooler (6543) |
+| `DATABASE_URL` | o endereço do dia a dia (porta **6543**) |
+| `DATABASE_URL_DIRECT` | o endereço de instalação (porta **5432**) |
+| `SESSION_SECRET` | uma frase aleatória longa — pode gerar em <https://generate-secret.vercel.app/32> |
+| `OPENAI_API_KEY` | sua chave da OpenAI |
+| `SUPABASE_URL` | o Project URL do passo 1.5 |
+| `SUPABASE_SERVICE_ROLE_KEY` | a chave service_role do passo 1.5 |
+| `SUPABASE_STORAGE_BUCKET` | `documentos` |
+
+**Só para a instalação** (você remove depois, na Parte 4):
+
+| Nome | O que colar |
+|---|---|
+| `SETUP_TOKEN` | uma senha longa que você inventa, com 16+ caracteres. Ex.: `instalacao-santa-doroteia-2026` |
+| `SETUP_ADMIN_EMAIL` | seu e-mail |
+| `SETUP_ADMIN_PASSWORD` | a senha que você vai usar para entrar (8+ caracteres) |
+| `SETUP_ADMIN_NAME` | seu nome |
+| `SETUP_SCHOOL_NAME` | `Colégio Santa Dorotéia Belo Horizonte - MG` |
+
+### 2.3 Publicar
+
+Clique em **Deploy**. O primeiro build leva uns 2 minutos. No fim, a Vercel
+mostra um endereço `https://alguma-coisa.vercel.app`.
+
+Guarde esse endereço — é o `SEU-ENDERECO` das instruções a seguir.
+
+### 2.4 Escolher o plano
+
+O plano **Hobby** (gratuito) funciona para demonstrar, com um limite real: cada
+requisição tem no máximo **60 segundos**. Como a ingestão faz OCR e classificação
+dentro da requisição, **PDFs grandes ou digitalizados vão estourar o tempo**.
+
+O plano **Pro** (US$ 20/mês) sobe esse limite para 300 segundos e resolve o uso
+normal. Para carregar centenas de PDFs de uma vez, o certo é passar a ingestão
+para uma fila — está anotado como próximo passo no README.
 
 ---
 
-## Parte 4 — Depois de publicar
+## Parte 3 — Instalação (uma chamada, pelo navegador)
 
-- **Trocar as senhas do seed.** Todos os usuários de demonstração compartilham a mesma senha. Antes de dar acesso a alguém de verdade, troque-as.
-- **Backups.** O Supabase Pro faz backup diário automático. No plano gratuito, não há — vale exportar manualmente se o acervo já for real.
-- **Limite de gastos na OpenAI.** Em <https://platform.openai.com/settings/organization/limits>, defina um teto mensal. É a proteção mais simples contra um erro de laço custar caro.
-- **Monitoramento.** A aba **Logs** da Vercel mostra os erros das rotas de API; o **Logs Explorer** do Supabase mostra as consultas lentas.
+O banco ainda está vazio: não há tabelas nem usuários. A aplicação cria tudo
+sozinha.
+
+Abra o **terminal do seu computador** (no Mac: Spotlight → "Terminal"; no
+Windows: menu Iniciar → "PowerShell") e cole a linha abaixo, trocando os dois
+valores em maiúsculas:
+
+```bash
+curl -X POST "https://SEU-ENDERECO/api/setup?token=SEU_SETUP_TOKEN"
+```
+
+> Não é o mesmo que "rodar o projeto localmente" — é só uma chamada ao site, e
+> qualquer ferramenta que faça uma requisição POST serve. Se preferir não usar o
+> terminal, dá para fazer pelo <https://reqbin.com>: cole a URL completa (com o
+> token), escolha o método **POST** e clique em Send.
+
+A resposta esperada:
+
+```json
+{
+  "ok": true,
+  "steps": [
+    "4 migração(ões) aplicada(s): ...",
+    "Escola criada: Colégio Santa Dorotéia Belo Horizonte - MG",
+    "Administrador criado: voce@email.com (matrícula ADM001)"
+  ]
+}
+```
+
+Rodar de novo não faz mal: as migrações são idempotentes e o administrador não é
+duplicado nem tem a senha sobrescrita.
+
+### Se der erro
+
+| Resposta | O que fazer |
+|---|---|
+| `404 Não encontrado` | O `SETUP_TOKEN` não bate, ou a variável não foi salva. Confira na Vercel e **refaça o deploy** — variáveis novas só valem no próximo build. |
+| `As migrações precisam da conexão direta (porta 5432)` | Faltou a `DATABASE_URL_DIRECT`, ou ela ficou com a porta 6543. |
+| `type "vector" does not exist` | A extensão do passo 1.2 não foi ativada. |
+| `password authentication failed` | O `[YOUR-PASSWORD]` continua literal em algum dos endereços. |
+| `Faltam SETUP_ADMIN_EMAIL e SETUP_ADMIN_PASSWORD` | O schema foi criado; falta preencher essas duas e chamar de novo. |
+
+---
+
+## Parte 4 — Entrar e fechar a porta
+
+1. Abra `https://SEU-ENDERECO` e entre com a **matrícula `ADM001`** e a senha que
+   você definiu em `SETUP_ADMIN_PASSWORD`.
+2. Volte na Vercel → **Settings** → **Environment Variables** e **remova**:
+   - `SETUP_TOKEN`
+   - `SETUP_ADMIN_PASSWORD`
+3. Clique em **Redeploy** para as remoções valerem.
+
+Sem o `SETUP_TOKEN`, a rota de instalação deixa de existir — responde 404 para
+qualquer um. Esse é o fechamento.
+
+---
+
+## Parte 5 — Configurar o colégio
+
+Com o administrador criado, tudo o mais é pela interface:
+
+1. **Administração → Configurações**
+   Ajuste o início do ano letivo e o fim de cada uma das três etapas com o
+   calendário oficial. Escreva também as informações gerais (horários,
+   unidades, telefone da secretaria) — isso entra no contexto de toda resposta.
+
+2. **Administração → Whitelabel**
+   Suba o logo oficial e ajuste as cores.
+
+3. **Administração → Usuários**
+   Por ora, cadastre manualmente alguns usuários de teste. O cadastro em massa
+   por planilha está no plano (ver README).
+
+4. **Administração → Ingestão**
+   Suba os PDFs. Para testar antes do acervo real, use os dez documentos
+   fictícios em [`documentos-exemplo/`](./documentos-exemplo/) — o README de lá
+   diz o que perguntar depois.
+
+---
+
+## Domínio próprio
+
+**Project Settings** → **Domains** → **Add**. No painel do seu provedor de DNS:
+
+- subdomínio (`assistente.santadoroteia.com.br`): registro **CNAME** apontando
+  para `cname.vercel-dns.com`
+- domínio raiz: registro **A** apontando para o IP que a Vercel mostrar
+
+O HTTPS é emitido automaticamente depois que o DNS propaga (pode levar algumas
+horas).
+
+---
+
+## Depois de publicar
+
+- **Limite de gastos na OpenAI.** Em
+  <https://platform.openai.com/settings/organization/limits>, defina um teto
+  mensal. É a proteção mais simples contra uma surpresa na fatura.
+- **Backups.** O Supabase Pro faz backup diário automático. No plano gratuito
+  não há — vale contratar antes de o acervo virar o oficial da escola.
+- **Onde ver erros.** Aba **Logs** na Vercel (erros da aplicação) e **Logs** no
+  Supabase (consultas lentas).
+- **Senhas.** Cada pessoa cadastrada recebe uma senha definida no cadastro.
+  Troque a sua depois do primeiro acesso.
+
+---
+
+## Alternativa: aplicar o schema pelo Supabase
+
+Se a Parte 3 falhar por qualquer motivo, dá para criar as tabelas à mão:
+
+1. Supabase → **SQL Editor** → **New query**.
+2. Abra os arquivos de `drizzle/` no GitHub, **na ordem numérica**
+   (`0000_…`, `0001_…`, `0002_…`, `0003_…`).
+3. Copie o conteúdo de cada um, cole no editor e clique em **Run** — um de cada
+   vez.
+
+Depois disso, chame a rota de instalação de novo: ela vai pular as tabelas que
+já existem e criar só o administrador.

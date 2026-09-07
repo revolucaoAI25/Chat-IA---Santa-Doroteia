@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { conversations, messages } from '@/lib/db/schema';
+import { conversations, messages, tenants } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
 import { retrieve } from '@/lib/rag/retrieve';
 import { streamAnswer } from '@/lib/rag/answer';
@@ -15,11 +15,22 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 /**
- * Turnos de conversa carregados como contexto. A conversa não persiste entre
- * sessões — cada visita começa do zero, e este limite impede que uma sessão
- * longa cresça indefinidamente.
+ * Depois deste tempo sem interação, a próxima pergunta começa uma conversa
+ * nova. Retomar uma thread de ontem traria contexto que a pessoa já esqueceu —
+ * e a IA trataria como se a conversa nunca tivesse parado.
  */
-const HISTORY_TURNS = 4;
+const CONVERSATION_IDLE_HOURS = Number(process.env.CONVERSATION_IDLE_HOURS ?? 24);
+
+/**
+ * Teto de segurança do contexto, em caracteres.
+ *
+ * A conversa NÃO é cortada num número fixo de turnos: enquanto a pessoa estiver
+ * conversando, o encadeamento inteiro vai junto — é o que ela espera ao dizer
+ * "e a de história?" cinco perguntas depois. Este limite existe só para uma
+ * conversa muito longa não crescer sem fim; ~24 mil caracteres são cerca de 6
+ * mil tokens, o que cabe com folga ao lado dos trechos dos documentos.
+ */
+const HISTORY_CHAR_BUDGET = 24_000;
 
 const bodySchema = z.object({
   question: z.string().min(1).max(2000),
@@ -52,15 +63,35 @@ export async function POST(request: Request) {
   const { question } = parsed.data;
   const startedAt = Date.now();
 
-  // A conversa é sempre relida do banco com o dono conferido: um id de outra
-  // pessoa não pode ser reaproveitado para ler ou escrever histórico alheio.
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, user.tenantId),
+    columns: { settings: true },
+  });
+  const settings = tenant?.settings ?? null;
+
+  /*
+   * Qual conversa continuar.
+   *
+   * A thread é sempre relida com o dono conferido — um id de outra pessoa não
+   * pode ser reaproveitado para ler ou escrever histórico alheio. E uma thread
+   * parada há mais de CONVERSATION_IDLE_HOURS é aposentada: a pergunta de hoje
+   * não é continuação da conversa de ontem.
+   */
   let conversationId = parsed.data.conversationId ?? null;
+
   if (conversationId) {
     const existing = await db.query.conversations.findFirst({
       where: eq(conversations.id, conversationId),
-      columns: { id: true, userId: true },
+      columns: { id: true, userId: true, lastMessageAt: true, createdAt: true },
     });
-    if (!existing || existing.userId !== user.id) conversationId = null;
+
+    if (!existing || existing.userId !== user.id) {
+      conversationId = null;
+    } else {
+      const last = existing.lastMessageAt ?? existing.createdAt;
+      const idleHours = (Date.now() - last.getTime()) / 3_600_000;
+      if (idleHours > CONVERSATION_IDLE_HOURS) conversationId = null;
+    }
   }
 
   if (!conversationId) {
@@ -70,37 +101,24 @@ export async function POST(request: Request) {
         tenantId: user.tenantId,
         userId: user.id,
         title: question.slice(0, 80),
+        lastMessageAt: new Date(),
       })
       .returning({ id: conversations.id });
     conversationId = created.id;
   }
 
-  /*
-   * Janela de contexto da conversa.
-   *
-   * São as ÚLTIMAS mensagens, não as primeiras: ordena decrescente, corta e
-   * inverte. Ordenar crescente com LIMIT devolveria o começo da conversa, que
-   * é justamente a parte que não interessa para resolver "e a de história?".
-   *
-   * O limite existe porque a conversa não é resumida: sem ele, cada pergunta
-   * numa conversa longa carregaria tudo o que veio antes, encarecendo e
-   * diluindo o contexto. Quatro turnos cobrem o encadeamento real das
-   * perguntas de acompanhamento.
-   */
-  const recent = await db
-    .select({ role: messages.role, content: messages.content })
-    .from(messages)
-    .where(eq(messages.conversationId, conversationId))
-    .orderBy(desc(messages.createdAt))
-    .limit(HISTORY_TURNS * 2);
-
-  const history = recent.reverse();
+  const history = await loadHistory(conversationId);
 
   await db.insert(messages).values({ conversationId, role: 'user', content: question });
+  await db
+    .update(conversations)
+    .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+    .where(eq(conversations.id, conversationId));
+
   void touchUser(user.id);
 
   // 1. Planejar: resolver follow-up e decidir se vale perguntar de volta.
-  const plan = await planQuery({ user, question, history });
+  const plan = await planQuery({ user, question, history, settings });
 
   const encoder = new TextEncoder();
   const conversation = conversationId;
@@ -122,27 +140,31 @@ export async function POST(request: Request) {
           send({ type: 'delta', text });
           send({ type: 'clarify', options: plan.clarifyOptions });
 
-          await db.insert(messages).values({
-            conversationId: conversation,
-            role: 'assistant',
-            content: text,
-            citations: [],
-            searchQuery: plan.searchQuery,
-            wasClarification: true,
-            latencyMs: Date.now() - startedAt,
-            model: 'planner',
-          });
+          const [saved] = await db
+            .insert(messages)
+            .values({
+              conversationId: conversation,
+              role: 'assistant',
+              content: text,
+              citations: [],
+              searchQuery: plan.searchQuery,
+              wasClarification: true,
+              latencyMs: Date.now() - startedAt,
+              model: 'planner',
+            })
+            .returning({ id: messages.id });
 
           send({
             type: 'done',
             citations: [],
+            messageId: saved.id,
             usage: { promptTokens: null, completionTokens: null, model: 'planner' },
           });
           return;
         }
 
-        // 3. Buscar. A agenda só é consultada quando a pergunta é de data —
-        //    é uma consulta a mais, não vale pagar em toda pergunta.
+        // 3. Buscar. Os documentos são consultados SEMPRE, inclusive nas
+        //    perguntas de data; a agenda é um reforço, não um substituto.
         const wantsAgenda = plan.intent === 'agenda' || plan.intent === 'ambos';
         const [chunks, events] = await Promise.all([
           retrieve(user, plan.searchQuery),
@@ -158,6 +180,7 @@ export async function POST(request: Request) {
           history,
           events,
           assumption: plan.assumption,
+          settings,
         })) {
           if (event.type === 'delta') {
             answer += event.text;
@@ -180,7 +203,7 @@ export async function POST(request: Request) {
 
             await db
               .update(conversations)
-              .set({ updatedAt: new Date() })
+              .set({ lastMessageAt: new Date(), updatedAt: new Date() })
               .where(eq(conversations.id, conversation));
 
             // O id volta para o cliente poder registrar "útil / não útil".
@@ -210,4 +233,33 @@ export async function POST(request: Request) {
       'X-Accel-Buffering': 'no',
     },
   });
+}
+
+/**
+ * Histórico da conversa, do mais antigo para o mais novo.
+ *
+ * Busca do fim para o começo e para quando estoura o orçamento de caracteres,
+ * então uma conversa curta vai inteira e uma longuíssima perde só o começo —
+ * que é a parte menos relevante para entender a pergunta atual.
+ */
+async function loadHistory(
+  conversationId: string,
+): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+  const rows = await db
+    .select({ role: messages.role, content: messages.content })
+    .from(messages)
+    .where(eq(messages.conversationId, conversationId))
+    .orderBy(desc(messages.createdAt))
+    .limit(60);
+
+  const kept: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  let budget = HISTORY_CHAR_BUDGET;
+
+  for (const row of rows) {
+    budget -= row.content.length;
+    if (budget < 0 && kept.length > 0) break;
+    kept.push(row);
+  }
+
+  return kept.reverse();
 }

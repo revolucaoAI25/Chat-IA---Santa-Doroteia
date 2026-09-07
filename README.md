@@ -32,12 +32,16 @@ OCR, extração automática de datas e controle de acesso por perfil de verdade.
 | Contexto do usuário mantido pela secretaria (tela de Usuários) | ✅ |
 | Série avança sozinha na virada do ano letivo | ✅ |
 | Data e etapa (trimestre) vigentes no contexto da IA | ✅ |
+| Calendário letivo e contexto institucional editáveis pelo admin | ✅ |
+| Instalação pela própria aplicação, sem ferramenta local | ✅ |
 | Feedback útil/não útil por resposta | ✅ |
 | Limite de perguntas por usuário | ✅ |
 
 Fora do escopo desta entrega (mas com o banco e a arquitetura já preparados):
 telas de Documentos e Calendário, sincronização com Google Drive, automação de
-lembretes por e-mail e relatórios.
+lembretes por e-mail, relatórios e o
+[cadastro em massa de usuários](./docs/cadastro-em-massa.md) — este último já
+com o plano de implementação escrito.
 
 **Como publicar:** o passo a passo de Supabase e Vercel está em
 [DEPLOY.md](./DEPLOY.md).
@@ -51,6 +55,9 @@ O que perguntar depois de subi-los está no README daquela pasta.
 ---
 
 ## Rodando localmente
+
+> Para publicar direto na Vercel, sem instalar nada, siga o
+> [DEPLOY.md](./DEPLOY.md). Esta seção é só para quem quer desenvolver.
 
 Você precisa de **Node 20+** e um **Postgres com a extensão `pgvector`**
 (o Supabase já vem com ela).
@@ -161,9 +168,20 @@ pergunta → planejar → [esclarecer?] → buscar (documentos + agenda) → res
 
 3. **Responder** — com as citações e, se houver, a suposição declarada.
 
-A conversa **não persiste entre sessões**: cada visita começa do zero. Dentro da
-sessão, os últimos quatro turnos vão como contexto — o suficiente para resolver
-follow-ups, sem deixar a conversa crescer indefinidamente.
+### Ciclo de vida da conversa
+
+A thread acompanha a aba: ir ao perfil e voltar, ou dar um F5, retoma a conversa
+com as mensagens de volta na tela — o servidor guarda o histórico e o cliente
+guarda o id em `sessionStorage`. Fechar a aba encerra.
+
+O servidor também aposenta uma thread parada há mais de
+`CONVERSATION_IDLE_HOURS` (24 por padrão): a pergunta de hoje não é continuação
+da conversa de ontem.
+
+Dentro de uma conversa em andamento, o encadeamento **não é cortado** num número
+fixo de turnos — é o que a pessoa espera ao dizer "e a de história?" cinco
+perguntas depois. Há apenas um teto de segurança por volume de texto, para uma
+conversa muito longa não crescer sem fim.
 
 ### A agenda complementa os documentos, não os substitui
 

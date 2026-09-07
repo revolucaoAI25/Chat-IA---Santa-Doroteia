@@ -89,9 +89,31 @@ export const tenants = pgTable('tenants', {
   faviconUrl: text('favicon_url'),
   /** Tokens de marca (cores, tipografia, tamanho do logo) editados no Whitelabel. */
   branding: jsonb('branding').$type<Branding>().notNull().default({}),
+  /** Configurações acadêmicas e contexto institucional, editados no admin. */
+  settings: jsonb('settings').$type<TenantSettings>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * O que a escola configura sobre si mesma.
+ *
+ * Fica no banco, e não em variável de ambiente, porque é conhecimento da
+ * secretaria: corrigir a data de fim de uma etapa não pode exigir um deploy.
+ */
+export interface TenantSettings {
+  /** Início do ano letivo, em MM-DD. */
+  yearStart?: string;
+  /** Fim de cada uma das três etapas, em MM-DD, na ordem. */
+  etapaEnds?: [string, string, string];
+  /** Fuso do colégio (IANA), para que uma prova às 7h10 não vire "ontem". */
+  timezone?: string;
+  /**
+   * Contexto institucional livre que entra no prompt: horários, unidades,
+   * canais de atendimento — o que a IA deve saber e não está em documento.
+   */
+  institutionalContext?: string;
+}
 
 /**
  * Identidade visual editável pelo administrador. Todo campo é opcional: o que
@@ -322,6 +344,11 @@ export const conversations = pgTable('conversations', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull().default('Nova conversa'),
+  /**
+   * Última mensagem da conversa. É o que decide se uma nova pergunta continua
+   * a mesma thread ou começa outra.
+   */
+  lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

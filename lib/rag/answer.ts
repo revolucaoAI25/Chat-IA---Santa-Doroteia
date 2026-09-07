@@ -2,6 +2,7 @@ import { AI_MODELS, DEMO_MODE, openai } from '@/lib/ai/provider';
 import type { SessionUser } from '@/lib/auth/session';
 import { documentTypeLabel, serieLabel } from '@/lib/taxonomy';
 import { currentEtapa, formatToday, type Etapa } from '@/lib/academic-calendar';
+import type { TenantSettings } from '@/lib/db/schema';
 import { formatEventsForPrompt, type UpcomingEvent } from './events';
 import type { DocumentTypeValue } from '@/lib/db/schema';
 import type { RetrievedChunk } from './retrieve';
@@ -69,7 +70,12 @@ function audienceBriefing(user: SessionUser): string {
   }
 }
 
-function systemPrompt(user: SessionUser, today: string, etapa: Etapa): string {
+function systemPrompt(
+  user: SessionUser,
+  today: string,
+  etapa: Etapa,
+  institutionalContext: string | null,
+): string {
   const quando = etapa.emAndamento
     ? `Hoje é ${today}. O colégio divide o ano letivo em três etapas, e estamos na ${etapa.label} de ${etapa.anoLetivo}.`
     : `Hoje é ${today}, fora do período letivo. A referência mais próxima é a ${etapa.label} de ${etapa.anoLetivo}.`;
@@ -82,7 +88,7 @@ ${audienceBriefing(user)}
 QUANDO
 ${quando}
 Use isso para entender referências como "a prova" ou "esta etapa" e para dizer quando algo já passou. Mas **não restrinja a resposta à etapa atual por conta própria**: se o documento fala de outra etapa e responde à pergunta, use assim mesmo, deixando claro a que etapa se refere.
-
+${institutionalContext ? `\nSOBRE O COLÉGIO\nInformações gerais registradas pela administração. Valem como contexto de apoio; se um documento oficial disser outra coisa, o documento prevalece.\n${institutionalContext}\n` : ''}
 REGRA FUNDAMENTAL
 Responda EXCLUSIVAMENTE com base nos trechos de documentos oficiais fornecidos abaixo. Você não tem nenhuma outra fonte. Se os trechos não contiverem a resposta, diga com todas as letras que a informação não está nos documentos disponíveis e sugira o que procurar ou com quem falar na secretaria. Nunca preencha lacuna com conhecimento geral, suposição ou memória — uma data errada faz um aluno perder prova.
 
@@ -155,6 +161,8 @@ export type AnswerEvent = AnswerChunkEvent | AnswerDoneEvent;
 
 export interface AnswerOptions {
   user: SessionUser;
+  /** Configurações do colégio: etapas, fuso e contexto institucional. */
+  settings?: TenantSettings | null;
   question: string;
   chunks: RetrievedChunk[];
   /** Histórico recente, para perguntas de acompanhamento ("e a de história?"). */
@@ -167,7 +175,7 @@ export interface AnswerOptions {
 
 /** Gera a resposta em streaming, emitindo eventos consumíveis pela rota HTTP. */
 export async function* streamAnswer(options: AnswerOptions): AsyncGenerator<AnswerEvent> {
-  const { user, question, chunks, history, events = [], assumption } = options;
+  const { user, question, chunks, history, events = [], assumption, settings } = options;
   const citations = toCitations(chunks);
 
   // Sem trecho E sem agenda não há do que responder. Com agenda, ainda dá:
@@ -188,8 +196,8 @@ export async function* streamAnswer(options: AnswerOptions): AsyncGenerator<Answ
     return;
   }
 
-  const today = formatToday();
-  const etapa = currentEtapa();
+  const today = formatToday(settings);
+  const etapa = currentEtapa(settings);
 
   if (DEMO_MODE) {
     yield* demoAnswer(chunks, events);
@@ -223,7 +231,10 @@ export async function* streamAnswer(options: AnswerOptions): AsyncGenerator<Answ
     stream: true,
     stream_options: { include_usage: true },
     messages: [
-      { role: 'system', content: systemPrompt(user, today, etapa) },
+      {
+        role: 'system',
+        content: systemPrompt(user, today, etapa, settings?.institutionalContext?.trim() || null),
+      },
       ...history.slice(-6),
       { role: 'user', content: sections.join('\n\n---\n\n') },
     ],

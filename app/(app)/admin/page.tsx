@@ -10,6 +10,7 @@ import { storageDriver } from '@/lib/storage';
 import { IngestClient } from './ingest-client';
 import { WhitelabelClient } from './whitelabel-client';
 import { UsersClient, type AdminUser } from './users-client';
+import { SettingsClient } from './settings-client';
 import { users as usersTable } from '@/lib/db/schema';
 import { effectiveSerie } from '@/lib/series-progression';
 import { currentAnoLetivo } from '@/lib/academic-calendar';
@@ -21,6 +22,7 @@ export const dynamic = 'force-dynamic';
 const TABS = [
   { key: 'ingestao', label: 'Ingestão' },
   { key: 'usuarios', label: 'Usuários' },
+  { key: 'configuracoes', label: 'Configurações' },
   { key: 'whitelabel', label: 'Whitelabel' },
 ] as const;
 
@@ -63,6 +65,8 @@ export default async function AdminPage({
               <WhitelabelTab tenantId={user.tenantId} />
             ) : active === 'usuarios' ? (
               <UsersTab tenantId={user.tenantId} />
+            ) : active === 'configuracoes' ? (
+              <SettingsTab tenantId={user.tenantId} />
             ) : (
               <IngestTab tenantId={user.tenantId} />
             )}
@@ -183,4 +187,13 @@ async function UsersTab({ tenantId }: { tenantId: string }) {
   });
 
   return <UsersClient users={list} anoLetivo={currentAnoLetivo()} />;
+}
+
+async function SettingsTab({ tenantId }: { tenantId: string }) {
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: { settings: true },
+  });
+
+  return <SettingsClient settings={tenant?.settings ?? {}} />;
 }

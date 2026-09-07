@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { AI_MODELS, DEMO_MODE, openai } from '@/lib/ai/provider';
 import type { SessionUser } from '@/lib/auth/session';
 import { ROLE_LABELS, serieLabel } from '@/lib/taxonomy';
-import { currentEtapa, todayISO, type Etapa } from '@/lib/academic-calendar';
+import { currentEtapa, resolveCalendar, todayISO, type Etapa } from '@/lib/academic-calendar';
+import type { TenantSettings } from '@/lib/db/schema';
 
 /**
  * Planejamento da pergunta, antes de buscar.
@@ -98,15 +99,16 @@ export interface PlanInput {
   user: SessionUser;
   question: string;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
+  settings?: TenantSettings | null;
 }
 
 export async function planQuery(input: PlanInput): Promise<QueryPlan> {
-  const { user, question, history } = input;
+  const { user, question, history, settings } = input;
 
   if (DEMO_MODE) return fallbackPlan(question);
 
-  const today = todayISO();
-  const etapa = currentEtapa();
+  const today = todayISO(new Date(), resolveCalendar(settings).timezone);
+  const etapa = currentEtapa(settings);
 
   try {
     const response = await openai().chat.completions.create({
