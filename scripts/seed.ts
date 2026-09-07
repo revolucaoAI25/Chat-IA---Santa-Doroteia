@@ -125,6 +125,7 @@ async function main() {
         summary: seed.summary,
         segments: seed.segments,
         series: seed.series,
+        restrictToScope: seed.restrictToScope ?? false,
         etapa: seed.etapa,
         anoLetivo: seed.anoLetivo,
         validFrom: seed.validFrom,

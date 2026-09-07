@@ -23,7 +23,10 @@ import type { TenantSettings } from '@/lib/db/schema';
 
 const planSchema = z.object({
   searchQuery: z.string().min(1),
+  /** Outras formulações da mesma pergunta, para a busca vetorial não depender de uma só. */
+  altQueries: z.array(z.string()).max(2),
   intent: z.enum(['documentos', 'agenda', 'ambos']),
+  breadth: z.enum(['foco', 'amplo']),
   needsClarification: z.boolean(),
   clarifyingQuestion: z.string().nullable(),
   clarifyOptions: z.array(z.string()).max(4),
@@ -36,12 +39,14 @@ const jsonSchema = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'searchQuery', 'intent', 'needsClarification',
+    'searchQuery', 'altQueries', 'intent', 'breadth', 'needsClarification',
     'clarifyingQuestion', 'clarifyOptions', 'assumption',
   ],
   properties: {
     searchQuery: { type: 'string' },
+    altQueries: { type: 'array', items: { type: 'string' } },
     intent: { type: 'string', enum: ['documentos', 'agenda', 'ambos'] },
+    breadth: { type: 'string', enum: ['foco', 'amplo'] },
     needsClarification: { type: 'boolean' },
     clarifyingQuestion: { type: ['string', 'null'] },
     clarifyOptions: { type: 'array', items: { type: 'string' } },
@@ -74,10 +79,22 @@ Exemplos:
 - "quando é?" depois de falar da festa junina -> "data e horário da festa junina"
 - "o que cai?" -> "conteúdo da avaliação" + a matéria e a série do contexto
 
+"altQueries" — até 2, podem ser 0
+Outras formas de dizer a MESMA busca, com o vocabulário que o documento provavelmente usa, não o da pessoa. É o que salva quando a palavra da pergunta não é a palavra do papel timbrado.
+Exemplos:
+- "o que cai na prova de matemática" -> ["conteúdos programáticos da avaliação de matemática", "matriz de conteúdos matemática avaliação"]
+- "posso entrar de tênis?" -> ["regras de uniforme escolar", "norma sobre vestimenta e calçado"]
+- "quanto custa a formatura?" -> ["valores e formas de pagamento da formatura"]
+Não repita a searchQuery. Se não houver formulação melhor, devolva lista vazia.
+
 "intent"
 - "agenda": a pergunta é sobre QUANDO algo acontece (datas, prazos, próximas provas, calendário).
 - "documentos": a pergunta é sobre REGRAS ou CONTEÚDO (o que cai, como funciona, o que é permitido).
 - "ambos": precisa das duas coisas.
+
+"breadth"
+- "foco": a pergunta tem uma resposta pontual — uma data, uma regra, um valor. É o caso comum.
+- "amplo": a pergunta pede panorama e a resposta só está certa se for completa — "todos os prazos do semestre", "tudo que preciso saber sobre a recuperação", "quais eventos vêm por aí". Aqui a busca varre mais documentos.
 
 "needsClarification" — o critério é rigoroso, e o padrão é FALSE
 Só marque true quando as leituras possíveis levarem a respostas INCOMPATÍVEIS e você não tiver como escolher entre elas. Antes de marcar true, tente resolver por conta própria: o perfil acima costuma bastar.
@@ -160,9 +177,15 @@ function fallbackPlan(question: string): QueryPlan {
     lower,
   );
 
+  const amplo = /\btodos?\b|\btodas?\b|\blista\b|\blistar\b|\bquais\b|panorama|resumo|semestre|\bano\b/.test(
+    lower,
+  );
+
   return {
     searchQuery: question,
+    altQueries: [],
     intent: agenda ? 'agenda' : 'documentos',
+    breadth: amplo ? 'amplo' : 'foco',
     needsClarification: false,
     clarifyingQuestion: null,
     clarifyOptions: [],

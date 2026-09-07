@@ -205,9 +205,21 @@ export const documents = pgTable(
     type: documentType('type').notNull().default('outro'),
     summary: text('summary'),
 
-    /** Classificação automática. Vazio = vale para toda a escola. */
+    /**
+     * Classificação: a que série e segmento o documento se refere.
+     *
+     * É METADADO, não permissão. Serve ao cabeçalho do trecho, à exibição e à
+     * ordenação da busca. Um documento classificado como "7º ano" continua
+     * visível para o resto da escola — a não ser que `restrictToScope` diga o
+     * contrário.
+     */
     segments: segment('segments').array().notNull().default(sql`'{}'::segment[]`),
     series: text('series').array().notNull().default(sql`'{}'::text[]`),
+    /**
+     * Escolha explícita da administração no upload: "exibir somente para estas
+     * séries/segmentos". Só então a classificação vira recorte de acesso.
+     */
+    restrictToScope: boolean('restrict_to_scope').notNull().default(false),
     etapa: text('etapa'),
     anoLetivo: integer('ano_letivo'),
 

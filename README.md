@@ -202,21 +202,54 @@ fica em `a_revisar` e **não é apresentado como fato** até alguém conferir.
 
 ### A busca é híbrida, de propósito
 
-`lib/rag/retrieve.ts` roda **três** buscas em paralelo, 30 candidatos cada, e
-funde as listas com Reciprocal Rank Fusion (k = 60), ficando com os 8 melhores
-trechos:
+`lib/rag/retrieve.ts` roda várias buscas em paralelo e funde as listas com
+Reciprocal Rank Fusion (k = 60):
 
-- **vetorial** (`pgvector`, cosseno, índice HNSW) — entende *"quando é a prova
-  de matemática?"* e sinônimos, mas erra *"Comunicado 112"*;
+- **vetorial** (`pgvector`, cosseno, índice HNSW) — uma lista por formulação da
+  pergunta. Entende *"quando é a prova de matemática?"* e sinônimos, mas erra
+  *"Comunicado 112"*;
 - **lexical estrita** (`websearch_to_tsquery`, que une os termos com AND) —
   acerta o código exato, mas devolve zero assim que a consulta cresce;
 - **lexical ampla** (os mesmos radicais unidos por OR, ordenados por
   `ts_rank`) — sobrevive à consulta longa que o planejador produz; casar mais
   termos sobe na lista.
 
-As três falham em situações opostas. O RRF combina por posição, sem precisar
+Elas falham em situações opostas. O RRF combina por posição, sem precisar
 calibrar pesos entre escalas de score incompatíveis: um trecho bem colocado em
 duas listas ganha do primeiro colocado de uma só.
+
+**Várias formulações da mesma pergunta.** O planejador devolve até duas
+reescritas com o vocabulário que o documento provavelmente usa — *"o que cai na
+prova"* vira também *"conteúdos programáticos da avaliação"*. Elas saem na mesma
+chamada em que ele já reescreve a consulta, então não custam nenhuma ida a mais
+ao modelo: só um lote de embeddings, que é a parte barata.
+
+**O orçamento é adaptativo, não um número fixo de trechos.** O planejador
+classifica a pergunta como `foco` (uma data, uma regra — o caso comum) ou
+`amplo` (*"todos os prazos do semestre"*, onde a resposta só está certa se for
+completa). Daí saem os limites:
+
+| | candidatos | trechos | caracteres |
+|---|---|---|---|
+| `foco` | 30 por lista | até 12 | 14.000 |
+| `amplo` | 60 por lista | até 30 | 26.000 |
+
+A seleção é gulosa em duas passadas: a primeira limita quantos trechos cada
+documento pode ocupar (senão um calendário anual longo toma o prompt inteiro e a
+resposta fica cega para os outros documentos); a segunda gasta a sobra sem esse
+limite, porque quando só existe um documento relevante o certo é aprofundar
+nele.
+
+**Expansão de contexto.** Escolhidos os trechos, uma última consulta traz os
+**vizinhos imediatos** (`ordinal ± 1`) dos mesmos documentos, dentro dos 30% do
+orçamento reservados para isso. Uma tabela de cronograma quase sempre cruza a
+fronteira entre dois trechos — o cabeçalho num, as datas no outro —, e recuperar
+o trecho certo e ainda assim responder errado por falta do vizinho é o modo de
+falha mais difícil de diagnosticar, porque a busca *parece* ter funcionado.
+
+O contexto final vai ordenado por documento (o mais relevante primeiro) e, dentro
+de cada um, na ordem do texto: intercalar trechos de documentos diferentes por
+score puro dá ao modelo um contexto picotado e mais difícil de citar.
 
 O índice lexical usa uma configuração própria, `portuguese_unaccent`, que passa
 o `unaccent` antes do radicalizador (migração `0004`). Sem ela a busca era
@@ -239,6 +272,26 @@ extrair pelo chat um documento que não poderia abrir na lista, porque o recorte
 acontece dentro do `SELECT` — os trechos proibidos nunca chegam ao prompt. O
 download por URL direta devolve **404** (e não 403) para quem não tem acesso:
 saber o id de um documento não é evidência de que ele existe.
+
+**Classificar não é restringir.** A série e o segmento que a IA deduz são
+metadado: entram no cabeçalho do trecho, na tela de Documentos e na ordenação da
+busca, mas não escondem nada. O erro do classificador para os dois lados, e o
+erro caro é o de esconder — um comunicado geral que menciona o 7º ano de
+passagem sumiria para o resto da escola, e ninguém descobriria, porque a pessoa
+só receberia "não encontrei".
+
+Restringe quem a administração marcar explicitamente no upload (*"exibir somente
+para essas séries e segmentos"*, coluna `restrict_to_scope`), e a marca só fica
+disponível depois que a série é escolhida à mão — restringir ao palpite do
+modelo seria o mesmo problema pela porta dos fundos.
+
+O **público-alvo** (aluno / professor / coordenação) é diferente: restringe
+sempre. Ali a escolha é humana e deliberada, e um documento marcado como "só
+corpo docente" é exatamente isso.
+
+Para a classificação não deixar de valer, ela virou **ordenação**: um documento
+da série de quem pergunta sobe 25% na fusão, um de outra série desce 20%. O
+aluno do 7º ano alcança o cronograma do 9º se precisar, mas vê o dele primeiro.
 
 ### Whitelabel
 

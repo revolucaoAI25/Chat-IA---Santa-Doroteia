@@ -28,34 +28,48 @@ export function documentVisibilityFilter(user: SessionUser, alias = 'd'): SQL {
     return sql.join(conditions, sql` AND `);
   }
 
-  // Público-alvo: lista vazia significa "toda a escola".
+  /*
+   * Público-alvo: sempre restringe.
+   *
+   * Diferente da série, aqui a escolha é humana e deliberada — o administrador
+   * marcou "só corpo docente" na tela de upload. Lista vazia significa "toda a
+   * escola", que também é uma escolha.
+   */
   conditions.push(
     sql`(cardinality(${t}.audience) = 0 OR ${user.role}::user_role = ANY(${t}.audience))`,
   );
 
+  /*
+   * Série e segmento: só restringem quando a administração marcou
+   * `restrict_to_scope` no upload.
+   *
+   * A classificação automática sozinha NÃO esconde documento. Ela erra para os
+   * dois lados, e o erro caro é o de esconder: um comunicado geral que menciona
+   * o 7º ano de passagem sumiria para o resto da escola, e ninguém descobriria
+   * — a pessoa só receberia "não encontrei". Quando a restrição de fato importa
+   * (a prova de uma série específica), o administrador marca, e aí vale.
+   *
+   * Professores continuam vendo todas as séries mesmo com a marca: precisam
+   * preparar aula e responder sobre turmas que não são a sua.
+   */
   if (user.role === 'aluno') {
-    // Alunos e responsáveis são recortados por série e segmento.
     const series = [user.serie, ...user.extraSeries].filter(Boolean) as string[];
     const seriesArray = sql`ARRAY[${sql.join(
       series.map((s) => sql`${s}`),
       sql`, `,
     )}]::text[]`;
 
-    conditions.push(
+    const serieOk =
       series.length > 0
         ? sql`(cardinality(${t}.series) = 0 OR ${t}.series && ${seriesArray})`
-        : sql`cardinality(${t}.series) = 0`,
-    );
+        : sql`cardinality(${t}.series) = 0`;
 
-    conditions.push(
-      user.segment
-        ? sql`(cardinality(${t}.segments) = 0 OR ${user.segment}::segment = ANY(${t}.segments))`
-        : sql`cardinality(${t}.segments) = 0`,
-    );
+    const segmentoOk = user.segment
+      ? sql`(cardinality(${t}.segments) = 0 OR ${user.segment}::segment = ANY(${t}.segments))`
+      : sql`cardinality(${t}.segments) = 0`;
+
+    conditions.push(sql`(${t}.restrict_to_scope = false OR (${serieOk} AND ${segmentoOk}))`);
   }
-
-  // Professores veem todas as séries: precisam preparar aula e responder
-  // sobre turmas que não são a sua.
 
   return sql.join(conditions, sql` AND `);
 }

@@ -95,6 +95,15 @@ export async function POST(request: Request) {
       .getAll('series')
       .map(String)
       .filter((s) => SERIE_VALUES.has(s));
+
+    /*
+     * Restringir exige um escopo escolhido à mão. Aceitar "restrinja ao que a
+     * IA deduziu" reintroduziria o problema que essa separação existe para
+     * resolver: documento sumindo por causa de um palpite do modelo.
+     */
+    overrides.restrictToScope =
+      form.get('restrictToScope') === 'true' &&
+      (overrides.segments.length > 0 || overrides.series.length > 0);
   }
 
   try {

@@ -28,6 +28,12 @@ export interface SeedDocument {
   summary: string;
   segments: Segment[];
   series: string[];
+  /**
+   * "Exibir somente para essas séries/segmentos". Ausente = classificação sem
+   * restrição, que é o padrão: a série diz do que o documento trata, não quem
+   * pode lê-lo.
+   */
+  restrictToScope?: boolean;
   etapa: string | null;
   anoLetivo: number;
   validFrom: string | null;
@@ -321,6 +327,9 @@ Coordenação Pedagógica`,
     summary: 'Datas, estrutura e regras do simulado no formato ENEM para o Ensino Médio.',
     segments: ['ensino_medio'],
     series: ['1_serie_em', '2_serie_em', '3_serie_em'],
+    // Único documento do acervo de exemplo com restrição explícita: serve para
+    // verificar que a marca da administração continua valendo.
+    restrictToScope: true,
     etapa: '3ª etapa',
     anoLetivo: 2026,
     validFrom: '2026-09-01',

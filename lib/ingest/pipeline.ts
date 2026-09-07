@@ -34,6 +34,8 @@ export interface ClassificationOverrides {
   etapa?: string | null;
   segments?: Segment[];
   series?: string[];
+  /** "Exibir somente para essas séries/segmentos". Só a administração define. */
+  restrictToScope?: boolean;
   validUntil?: string | null;
 }
 
@@ -147,6 +149,8 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
     const finalType = overrides.type ?? analysis.type;
     const finalSegments = overrides.segments ?? analysis.segments;
     const finalSeries = overrides.series ?? analysis.series;
+    // Nunca vem da IA: a classificação automática classifica, não restringe.
+    const finalRestrict = overrides.restrictToScope === true;
     const finalAnoLetivo =
       overrides.anoLetivo !== undefined ? overrides.anoLetivo : analysis.anoLetivo;
     const finalEtapa = overrides.etapa !== undefined ? overrides.etapa : analysis.etapa;
@@ -165,6 +169,7 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
         summary: analysis.summary,
         segments: finalSegments,
         series: finalSeries,
+        restrictToScope: finalRestrict,
         etapa: finalEtapa,
         anoLetivo: finalAnoLetivo,
         validFrom: analysis.validFrom,

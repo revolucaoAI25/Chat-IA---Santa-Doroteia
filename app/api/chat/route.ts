@@ -167,8 +167,15 @@ export async function POST(request: Request) {
         //    perguntas de data; a agenda é um reforço, não um substituto.
         const wantsAgenda = plan.intent === 'agenda' || plan.intent === 'ambos';
         const [chunks, events] = await Promise.all([
-          retrieve(user, plan.searchQuery),
-          wantsAgenda ? upcomingEvents(user) : Promise.resolve([]),
+          retrieve(user, plan.searchQuery, {
+            variants: plan.altQueries,
+            breadth: plan.breadth,
+          }),
+          // Pergunta de panorama merece uma janela maior de agenda: "o que vem
+          // pela frente neste semestre" não cabe em 120 dias.
+          wantsAgenda
+            ? upcomingEvents(user, plan.breadth === 'amplo' ? 60 : 25, plan.breadth === 'amplo' ? 240 : 120)
+            : Promise.resolve([]),
         ]);
 
         let answer = '';

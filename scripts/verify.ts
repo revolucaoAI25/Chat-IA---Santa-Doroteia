@@ -73,13 +73,26 @@ async function main() {
   check('documento vencido fica fora para o aluno', !doAluno7.includes(vencido));
   check('documento vencido fica fora até para o admin', !doAdmin.includes(vencido));
 
+  // Classificado como 7º ano, mas SEM restrição explícita: continua visível
+  // para toda a escola. Classificar não é esconder.
   const conteudo7 = 'Conteúdos da Avaliação A3 — 7º ano';
   check('aluno do 7º ano vê o conteúdo do 7º ano', doAluno7.includes(conteudo7));
-  check('aluno do Ensino Médio NÃO vê o conteúdo do 7º ano', !doAlunoEM.includes(conteudo7));
+  check(
+    'classificação de série NÃO esconde: aluno do EM também vê o conteúdo do 7º ano',
+    doAlunoEM.includes(conteudo7),
+  );
 
+  // Único com `restrictToScope`: aqui a marca da administração tem de valer.
   const simulado = 'Simulado ENEM 2026 — Ensino Médio';
   check('aluno do Ensino Médio vê o Simulado ENEM', doAlunoEM.includes(simulado));
-  check('aluno do 7º ano NÃO vê o Simulado ENEM', !doAluno7.includes(simulado));
+  check(
+    'restrição explícita vale: aluno do 7º ano NÃO vê o Simulado ENEM',
+    !doAluno7.includes(simulado),
+  );
+  check(
+    'restrição explícita não atinge o professor',
+    doProfessor.includes(simulado),
+  );
 
   const festa = 'Festa Junina Solidária 2026 — Programação e Convite';
   check('documento sem recorte chega a todo mundo', doAluno7.includes(festa) && doAlunoEM.includes(festa));
@@ -123,6 +136,27 @@ async function main() {
     'consulta longa (reescrita pelo planejador) ainda recupera',
     consultaLonga.some((c) => c.title.includes('Cronograma de Avaliações')),
     `${consultaLonga.length} trecho(s), 1º = ${consultaLonga[0]?.title ?? '—'}`,
+  );
+
+  // A classificação não esconde mais nada, então ela precisa aparecer na
+  // ORDENAÇÃO: o documento do 7º ano vem antes para quem é do 7º ano.
+  const consulta = 'conteudos da avaliacao';
+  const posicao = async (u: SessionUser) =>
+    (await retrieve(u, consulta)).findIndex((c) => c.title.includes('A3 — 7º ano'));
+  const [pos7, posEM] = [await posicao(aluno7), await posicao(alunoEM)];
+  check(
+    'documento da série de quem pergunta vem antes',
+    pos7 >= 0 && (posEM < 0 || pos7 <= posEM),
+    `7º ano: posição ${pos7 + 1} · Ensino Médio: posição ${posEM + 1}`,
+  );
+
+  // Pergunta de panorama tem de varrer mais que uma pergunta pontual.
+  const foco = await retrieve(aluno7, 'quando e a prova de matematica', { breadth: 'foco' });
+  const amplo = await retrieve(aluno7, 'quando e a prova de matematica', { breadth: 'amplo' });
+  check(
+    'amplitude "amplo" recupera pelo menos tanto quanto "foco"',
+    amplo.length >= foco.length,
+    `foco ${foco.length} trecho(s) · amplo ${amplo.length} trecho(s)`,
   );
 
   const vazamento = await retrieve(aluno7, 'prazo para lançamento de notas conselho de classe');

@@ -351,15 +351,22 @@ horas).
 
 ---
 
-## Alternativa: aplicar o schema pelo Supabase
+## Atualizar o banco depois da instalação
 
-Se a Parte 3 falhar por qualquer motivo, dá para criar as tabelas à mão:
+Assim que o `SETUP_TOKEN` é removido, a rota `/api/setup` deixa de existir — e
+é ela que aplica mudanças de schema. Quando uma versão nova precisar de tabela
+ou coluna nova, o caminho é o SQL Editor:
 
-1. Supabase → **SQL Editor** → **New query**.
-2. Abra os arquivos de `drizzle/` no GitHub, **na ordem numérica**
-   (`0000_…`, `0001_…`, `0002_…`, `0003_…`).
-3. Copie o conteúdo de cada um, cole no editor e clique em **Run** — um de cada
-   vez.
+1. No GitHub, abra **[`drizzle/todas-as-migracoes.sql`](./drizzle/todas-as-migracoes.sql)**
+   e copie o arquivo inteiro (botão **Copy raw file**).
+2. Supabase → **SQL Editor** → **New query** → cole → **Run**.
+3. Vercel → **Redeploy**, para a aplicação subir com o código que usa o schema
+   novo.
 
-Depois disso, chame a rota de instalação de novo: ela vai pular as tabelas que
-já existem e criar só o administrador.
+O arquivo tem todas as migrações do projeto, na ordem, e é **idempotente**:
+rodar num banco já atualizado não muda nada. As mensagens de `NOTICE: ... already
+exists, skipping` são o comportamento esperado, não erro.
+
+Esse também é o plano B se a Parte 3 falhar: aplique o SQL por aqui e depois
+chame a rota de instalação, que vai pular as tabelas existentes e criar só o
+administrador.

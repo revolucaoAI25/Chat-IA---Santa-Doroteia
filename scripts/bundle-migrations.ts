@@ -17,6 +17,17 @@ import { join } from 'node:path';
  */
 const OUT = 'lib/db/migrations.generated.ts';
 
+/**
+ * Além do módulo, um .sql único para colar no SQL Editor do Supabase.
+ *
+ * Existe porque a rota /api/setup só responde enquanto o SETUP_TOKEN estiver
+ * configurado — e o passo seguinte da instalação é justamente remover essa
+ * variável. Sem este arquivo, toda atualização de schema exigiria reabrir a
+ * porta de instalação. Todas as migrações são idempotentes, então colar o
+ * arquivo inteiro é seguro em qualquer banco, novo ou já em uso.
+ */
+const OUT_SQL = 'drizzle/todas-as-migracoes.sql';
+
 async function main() {
   const dir = join(process.cwd(), 'drizzle');
   const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
@@ -48,7 +59,25 @@ ${body}
 `;
 
   await writeFile(join(process.cwd(), OUT), contents, 'utf8');
+
+  const combined = [
+    '-- GERADO POR scripts/bundle-migrations.ts — NÃO EDITE À MÃO.',
+    '-- A fonte da verdade são os arquivos em drizzle/*.sql.',
+    '--',
+    '-- Todas as migrações do projeto, na ordem, num arquivo só.',
+    '-- Para aplicar: Supabase -> SQL Editor -> New query -> colar tudo -> Run.',
+    '-- É idempotente: rodar de novo num banco já atualizado não faz nada.',
+    '',
+    ...entries.map(
+      ({ name, sql }) =>
+        `-- ${'='.repeat(74)}\n-- ${name}\n-- ${'='.repeat(74)}\n\n${sql.trim()}\n`,
+    ),
+  ].join('\n');
+
+  await writeFile(join(process.cwd(), OUT_SQL), `${combined}\n`, 'utf8');
+
   console.log(`  ${files.length} migração(ões) empacotada(s) em ${OUT}`);
+  console.log(`  e concatenadas em ${OUT_SQL}`);
 }
 
 main().catch((error) => {

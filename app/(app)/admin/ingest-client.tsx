@@ -97,6 +97,8 @@ export function IngestClient({
   const [overrideScope, setOverrideScope] = useState(false);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [series, setSeries] = useState<string[]>([]);
+  /** Classificar é uma coisa; esconder de quem não é da série é outra. */
+  const [restrictToScope, setRestrictToScope] = useState(false);
 
   const toggleAudience = (role: Role) =>
     setAudience((prev) =>
@@ -145,6 +147,10 @@ export function IngestClient({
         body.append('overrideScope', 'true');
         for (const s of segments) body.append('segments', s);
         for (const s of series) body.append('series', s);
+        // Sem escopo escolhido não há o que restringir; o servidor confere de novo.
+        if (restrictToScope && (segments.length > 0 || series.length > 0)) {
+          body.append('restrictToScope', 'true');
+        }
       }
 
       try {
@@ -350,8 +356,8 @@ export function IngestClient({
                     Definir manualmente o segmento e a série
                   </span>
                   <span className="mt-0.5 block text-[0.75rem] leading-snug text-muted">
-                    Segmento e série recortam quem enxerga o documento. Marque para escolher em vez
-                    de aceitar o que a IA deduziu.
+                    Segmento e série classificam o documento e ajudam a busca a priorizá-lo para
+                    quem é daquela série. Por si só <strong>não escondem</strong> nada de ninguém.
                   </span>
                 </span>
               </label>
@@ -386,11 +392,37 @@ export function IngestClient({
                     </div>
                   </div>
 
-                  <p className="text-[0.75rem] leading-relaxed text-muted">
-                    {segments.length === 0 && series.length === 0
-                      ? 'Nada marcado: o documento valerá para toda a escola.'
-                      : 'Só quem estiver nesses segmentos/séries verá o documento — e a IA também não o usará para os demais.'}
-                  </p>
+                  {/*
+                    A restrição é uma segunda decisão, e só aparece depois de a
+                    série ter sido escolhida à mão. Oferecê-la sobre a dedução
+                    da IA seria reintroduzir pela porta dos fundos o problema
+                    que estamos tirando: documento sumindo por causa de um
+                    palpite do modelo.
+                  */}
+                  {segments.length > 0 || series.length > 0 ? (
+                    <label className="flex cursor-pointer items-start gap-2.5 border-t border-line pt-4">
+                      <input
+                        type="checkbox"
+                        checked={restrictToScope}
+                        onChange={(event) => setRestrictToScope(event.target.checked)}
+                        className="mt-0.5 accent-navy"
+                      />
+                      <span>
+                        <span className="block text-[0.875rem] font-semibold text-ink">
+                          Exibir somente para essas séries e segmentos
+                        </span>
+                        <span className="mt-0.5 block text-[0.75rem] leading-snug text-muted">
+                          {restrictToScope
+                            ? 'Alunos de outras séries não veem este documento na lista nem recebem resposta baseada nele. Professores e coordenação continuam vendo.'
+                            : 'Sem marcar, o documento fica disponível para toda a escola — a série serve só para a busca priorizá-lo.'}
+                        </span>
+                      </span>
+                    </label>
+                  ) : (
+                    <p className="text-[0.75rem] leading-relaxed text-muted">
+                      Nada marcado: o documento vale para toda a escola.
+                    </p>
+                  )}
                 </div>
               ) : null}
             </div>
