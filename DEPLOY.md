@@ -313,6 +313,10 @@ Enquanto está vendo como outra pessoa, o menu **Administração** desaparece �
 a mesma verificação de papel que vale para qualquer aluno, aplicada a você. Não
 dá para entrar como outro administrador, só como aluno ou professor.
 
+O roteiro completo — quais usuários criar, com quais características, e a lista
+de perguntas com a resposta certa de cada uma — está em
+[`documentos-exemplo/README.md`](./documentos-exemplo/README.md).
+
 O que vale a pena conferir nessa visão:
 
 - **Documentos** mostra menos itens para um aluno do que para um professor, e
