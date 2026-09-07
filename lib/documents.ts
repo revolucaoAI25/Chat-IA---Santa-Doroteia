@@ -24,12 +24,20 @@ export interface LibraryDocument {
   segments: Segment[];
   series: string[];
   audience: string[];
+  /** Marca explícita: série e segmento passam a esconder, não só a classificar. */
+  restrictToScope: boolean;
+  validFrom: string | null;
   validUntil: string | null;
   pageCount: number | null;
   /** Data impressa no cabeçalho do documento. É a que identifica o comunicado. */
   documentDate: string | null;
   /** ISO. Entrada no sistema — só usada quando não há data no cabeçalho. */
   createdAt: string;
+  /**
+   * Fora de vigência: não responde no chat e ninguém além do administrador o vê.
+   * Só chega a ser `true` na listagem do administrador.
+   */
+  hidden: boolean;
 }
 
 interface Row extends Record<string, unknown> {
@@ -43,23 +51,49 @@ interface Row extends Record<string, unknown> {
   segments: Segment[];
   series: string[];
   audience: string[];
+  restrict_to_scope: boolean;
+  valid_from: string | null;
   valid_until: string | null;
   page_count: number | null;
   document_date: string | null;
   created_at: Date;
+  hidden: boolean;
 }
 
 export async function listVisibleDocuments(
   user: SessionUser,
   limit = 300,
 ): Promise<LibraryDocument[]> {
+  /*
+   * O administrador vê também o que está fora de vigência.
+   *
+   * Esta é a única tela onde se acha um documento específico no acervo inteiro
+   * — e o documento que mais precisa de conserto é justamente o que já saiu do
+   * ar: a data lida errado do cabeçalho o venceu antes da hora, ou ele deveria
+   * ter sido apagado e ninguém mais consegue chegar nele. Escondê-lo aqui
+   * tornaria o erro irreversível pela interface.
+   *
+   * Cada um desses vem marcado com `hidden`, e o cartão diz na cara que o
+   * documento não responde no chat. A promessa da tela ("são as fontes que o
+   * assistente usa") continua de pé porque a exceção está rotulada.
+   */
+  const scope =
+    user.role === 'admin'
+      ? sql`d.tenant_id = ${user.tenantId} AND d.status = 'ready'`
+      : documentVisibilityFilter(user, 'd');
+
   const rows = await db.execute<Row>(sql`
     SELECT
       d.id, d.title, d.type::text AS type, d.doc_number, d.summary,
       d.ano_letivo, d.etapa, d.segments, d.series, d.audience,
-      d.valid_until, d.page_count, d.document_date, d.created_at
+      d.restrict_to_scope, d.valid_from, d.valid_until,
+      d.page_count, d.document_date, d.created_at,
+      (
+        (d.valid_until IS NOT NULL AND d.valid_until < CURRENT_DATE)
+        OR (d.valid_from IS NOT NULL AND d.valid_from > CURRENT_DATE)
+      ) AS hidden
     FROM documents d
-    WHERE ${documentVisibilityFilter(user, 'd')}
+    WHERE ${scope}
     -- Ordenado pela data do próprio documento, não pela de upload: numa
     -- importação de acervo antigo, tudo entra no mesmo dia e a ordem de
     -- chegada não diz nada a quem procura o comunicado mais recente.
@@ -80,9 +114,12 @@ export async function listVisibleDocuments(
     segments: row.segments ?? [],
     series: row.series ?? [],
     audience: row.audience ?? [],
+    restrictToScope: row.restrict_to_scope,
+    validFrom: row.valid_from,
     validUntil: row.valid_until,
     pageCount: row.page_count,
     documentDate: row.document_date,
     createdAt: new Date(row.created_at).toISOString(),
+    hidden: row.hidden === true,
   }));
 }

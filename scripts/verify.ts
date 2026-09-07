@@ -4,6 +4,7 @@ import { db, sqlClient } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import type { SessionUser } from '@/lib/auth/session';
 import { documentVisibilityFilter } from '@/lib/rag/access';
+import { listVisibleDocuments } from '@/lib/documents';
 import { retrieve } from '@/lib/rag/retrieve';
 import { upcomingEvents } from '@/lib/rag/events';
 
@@ -72,6 +73,28 @@ async function main() {
   const vencido = 'Calendário de Provas — 1ª Etapa/2025 (encerrado)';
   check('documento vencido fica fora para o aluno', !doAluno7.includes(vencido));
   check('documento vencido fica fora até para o admin', !doAdmin.includes(vencido));
+
+  /*
+   * A regra de visibilidade e a listagem da tela de Documentos deixaram de ser
+   * a mesma coisa para o administrador, e a diferença é deliberada: a busca da
+   * IA continua sem enxergar o vencido (a checagem acima), mas a tela mostra —
+   * senão o documento com a data lida errada do cabeçalho, que venceu antes da
+   * hora, ficaria inalcançável para conserto. As duas checagens juntas são o
+   * que impede que uma delas seja "corrigida" para o lado errado.
+   */
+  const listaAdmin = await listVisibleDocuments(admin);
+  const listaAluno = await listVisibleDocuments(aluno7);
+  const naListaDoAdmin = listaAdmin.find((d) => d.title === vencido);
+  check('a tela de Documentos mostra o vencido ao administrador', Boolean(naListaDoAdmin));
+  check('e o mostra marcado como fora de vigência', naListaDoAdmin?.hidden === true);
+  check(
+    'o vencido continua fora da lista do aluno',
+    !listaAluno.some((d) => d.title === vencido),
+  );
+  check(
+    'nenhum documento vem marcado como fora de vigência para o aluno',
+    listaAluno.every((d) => !d.hidden),
+  );
 
   /*
    * O `valid_from` no futuro esconde o documento de todo mundo. É um recurso

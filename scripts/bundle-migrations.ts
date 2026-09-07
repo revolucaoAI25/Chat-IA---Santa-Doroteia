@@ -28,9 +28,21 @@ const OUT = 'lib/db/migrations.generated.ts';
  */
 const OUT_SQL = 'drizzle/todas-as-migracoes.sql';
 
+/*
+ * O bundle mora no mesmo diretório que lê, então precisa se excluir da lista.
+ *
+ * Sem isto ele engolia a si mesmo: cada execução empacotava a saída da anterior
+ * junto das migrações, e o arquivo dobrava de tamanho a cada `npm run
+ * db:migrate` — 79 KB de SQL repetido quatro vezes, num arquivo cuja única
+ * função é ser colado à mão no SQL Editor do Supabase.
+ */
+const BUNDLE_FILE = OUT_SQL.split('/').pop()!;
+
 async function main() {
   const dir = join(process.cwd(), 'drizzle');
-  const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
+  const files = (await readdir(dir))
+    .filter((f) => f.endsWith('.sql') && f !== BUNDLE_FILE)
+    .sort();
 
   const entries = await Promise.all(
     files.map(async (name) => ({ name, sql: await readFile(join(dir, name), 'utf8') })),

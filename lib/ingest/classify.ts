@@ -12,8 +12,8 @@ export const EVENT_AUTO_APPROVE_THRESHOLD = 0.75;
 const eventSchema = z.object({
   title: z.string().min(1),
   type: z.enum(EVENT_TYPES),
-  startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  startsOn: z.string(),
+  endsOn: z.string().nullable(),
   startsAtTime: z.string().nullable(),
   subject: z.string().nullable(),
   chamada: z.number().int().min(1).max(2).nullable(),
@@ -31,9 +31,19 @@ const analysisSchema = z.object({
   series: z.array(z.string()),
   etapa: z.string().nullable(),
   anoLetivo: z.number().int().nullable(),
-  /** Data impressa no cabeçalho/assinatura. Data o documento; nunca vira evento. */
-  documentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
-  validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  /*
+   * As datas entram como texto livre e são normalizadas depois, em `sanitize`.
+   *
+   * Exigir YYYY-MM-DD aqui parecia mais seguro e não era: o modelo devolvendo
+   * "OUT/2026" derrubava o `safeParse`, e com ele a ingestão inteira do
+   * arquivo — o documento não entrava no acervo por causa de um campo de
+   * metadado. Como os arquivos do colégio não têm formatação padronizada, esse
+   * caso não é raro. Aqui aceitamos o que vier; `sanitize` converte o que dá
+   * para converter e devolve null no resto, que a administração conserta pela
+   * tela de edição.
+   */
+  documentDate: z.string().nullable(),
+  validUntil: z.string().nullable(),
   events: z.array(eventSchema),
 });
 
@@ -93,7 +103,11 @@ REGRAS DE CLASSIFICAÇÃO
 - "segments" e "series": SOMENTE o que o documento indicar explicitamente. Se ele vale para toda a escola, devolva listas vazias — lista vazia significa "todo mundo vê", e é melhor do que um palpite errado que esconderia o documento de quem precisa.
 - "summary": 1 a 2 frases dizendo a que o documento serve, em português, sem repetir o título.
 - "validUntil": até quando a informação ainda vale, ou seja, a partir de quando o documento vira histórico. Um cronograma da 1ª etapa deixa de valer quando a etapa acaba. Sem base para concluir, null.
-- "documentDate": a data DO DOCUMENTO — a que aparece no cabeçalho, na linha de local e data ou junto da assinatura ("Belo Horizonte, 08 de outubro de 2026" -> "2026-10-08"). É quando o documento foi escrito, e é o que permite dizer qual comunicado é mais recente quando dois se contradizem. Não confunda com as datas do corpo: um comunicado emitido em outubro que anuncia a formatura de dezembro tem documentDate "2026-10-08", nunca "2026-12-11". Se o documento não trouxer data própria, null.
+- "documentDate": a data DO DOCUMENTO — quando ele foi escrito. É o que permite dizer qual comunicado é mais recente quando dois se contradizem.
+  Onde procurar, nesta ordem: linha de local e data no alto ou no pé ("Belo Horizonte, 08 de outubro de 2026"); junto da assinatura; no cabeçalho ou rodapé junto do número do comunicado; no nome do arquivo. Nem todo documento segue o mesmo padrão — procure a data que se refere ao próprio documento, esteja ela onde estiver.
+  Aceite qualquer notação e normalize para YYYY-MM-DD: "08/10/2026", "8.10.26", "08-out-2026", "8 de outubro de 2026", "OUT/2026", "2026-10-08". Dia e mês em português seguem a ordem BRASILEIRA: "03/04/2026" é 3 de abril, nunca 4 de março. Ano com dois dígitos vira 20xx. Se só houver mês e ano, use o dia 01.
+  NÃO confunda com as datas do corpo: um comunicado emitido em outubro que anuncia a formatura de dezembro tem documentDate "2026-10-08", nunca "2026-12-11". Também não é a data de uma reunião citada no texto, nem o prazo de entrega.
+  Na dúvida entre duas datas candidatas, prefira a que estiver mais perto do cabeçalho ou da assinatura. Se nenhuma for claramente a data do documento, devolva **null** — a administração completa depois, e null é melhor que a data errada, que faria o sistema tratar um comunicado antigo como o mais recente.
 
 REGRAS DE EXTRAÇÃO DE DATAS (o ponto mais importante)
 - Extraia apenas datas de COISAS QUE VÃO ACONTECER: provas, recuperações, simulados, entregas, eventos, reuniões, prazos.
@@ -101,11 +115,15 @@ REGRAS DE EXTRAÇÃO DE DATAS (o ponto mais importante)
 - Uma linha de cronograma com várias matérias vira VÁRIOS eventos, um por matéria/data.
 - "startsOn"/"endsOn" sempre em YYYY-MM-DD. Um intervalo ("de 08/06 a 17/06") preenche os dois; uma data única deixa "endsOn" null.
 - Se o ano não estiver escrito, use o ano letivo do documento; se nem esse existir, use o ano da data de referência informada no contexto.
+- Os documentos não têm formatação padronizada: a mesma escola escreve "12/11", "12 de novembro", "quinta-feira, 12/11/2026" e "12.11.26". Leia todas, e sempre na ordem brasileira (dia/mês).
 - "startsAtTime" em HH:MM quando houver horário; senão null.
 - "chamada": 1 ou 2 quando o texto falar de 1ª ou 2ª chamada; senão null.
 - "confidence": quão certo você está de que essa é mesmo uma data de evento futuro e de que leu o dia certo. Use abaixo de 0.75 quando o ano for inferido, quando a data estiver ambígua ou quando a linha estiver truncada.
 - "sourceExcerpt": o trecho LITERAL do documento de onde a data saiu, no máximo 200 caracteres. É o que permite a conferência humana.
 - Nenhuma data relevante? Devolva "events": [].
+
+SOBRE A FORMA DOS DOCUMENTOS
+Nem todo arquivo é um comunicado bem diagramado. Pode chegar sem papel timbrado, sem número, com o título só no nome do arquivo, em tabela, em ata, em lista solta, ou vindo de OCR com quebras de linha estranhas e acentos perdidos. Extraia o que der para extrair com segurança e devolva null no resto — a administração corrige pela tela, e um campo em branco é fácil de notar e consertar, enquanto um palpite errado passa despercebido e vira resposta errada meses depois.
 
 Não invente nada. Se a informação não está no texto, o valor é null ou lista vazia.`;
 
@@ -157,20 +175,135 @@ function clampForContext(text: string, limit: number): string {
   return `${text.slice(0, head)}\n\n[...trecho central omitido por tamanho...]\n\n${text.slice(-tail)}`;
 }
 
+const MESES: Record<string, number> = {
+  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
+  jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
+};
+
+/** Só existe em Postgres o que existe no calendário: 31/02 não é data. */
+function isRealDate(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
+}
+
+function iso(year: number, month: number, day: number): string | null {
+  if (!isRealDate(year, month, day)) return null;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Dois dígitos viram 20xx: o acervo do colégio não tem documento do século passado. */
+function fullYear(value: number): number {
+  return value < 100 ? 2000 + value : value;
+}
+
+/**
+ * Converte para YYYY-MM-DD o que o modelo devolveu em qualquer notação.
+ *
+ * O prompt já pede a data normalizada, e na maior parte das vezes ela vem assim.
+ * Isto é a rede embaixo: os arquivos do colégio não seguem um padrão — vêm de
+ * OCR, de planilha, de ata, com "12.11.26", "12 de novembro de 2026" ou
+ * "nov/2026" no cabeçalho — e o modelo às vezes repassa a forma original. Sem
+ * a conversão aqui, essa data ou derrubava a ingestão ou chegava ao Postgres
+ * como texto inválido.
+ *
+ * Ordem brasileira sempre: em "03/04/2026" o 3 é o dia. Não há como distinguir
+ * do formato americano pelo valor, e adivinhar erraria silenciosamente meses
+ * inteiros; a origem dos documentos é conhecida, então a regra é fixa.
+ *
+ * O que não couber em nenhuma forma volta null. Um campo vazio a administração
+ * enxerga e corrige na tela de edição; uma data errada ninguém percebe.
+ */
+export function normalizeDate(raw: string | null): string | null {
+  if (!raw) return null;
+
+  const text = raw
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    // Escapado, e não com os acentos literais: marcas combinantes soltas no
+    // código-fonte somem em qualquer normalização de arquivo e o regex passa a
+    // não casar com nada, silenciosamente.
+    .replace(/[\u0300-\u036f]/g, '');
+
+  // 2026-10-08 (e 2026/10/08)
+  const isoLike = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoLike) return iso(Number(isoLike[1]), Number(isoLike[2]), Number(isoLike[3]));
+
+  // 08/10/2026 · 8.10.26 · 08-10-2026
+  const numeric = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  if (numeric) {
+    return iso(fullYear(Number(numeric[3])), Number(numeric[2]), Number(numeric[1]));
+  }
+
+  // 8 de outubro de 2026 · 08-out-2026 · 8 out 2026
+  const withMonth = text.match(/^(\d{1,2})\s*(?:de\s+)?[-/ ]?\s*([a-z]{3,})\.?\s*(?:de\s+)?[-/ ]?\s*(\d{2,4})$/);
+  if (withMonth) {
+    const month = MESES[withMonth[2].slice(0, 3)];
+    if (month) return iso(fullYear(Number(withMonth[3])), month, Number(withMonth[1]));
+  }
+
+  // out/2026 · outubro de 2026 — sem dia, assume o primeiro.
+  const monthOnly = text.match(/^([a-z]{3,})\.?\s*(?:de\s+)?[-/ ]?\s*(\d{2,4})$/);
+  if (monthOnly) {
+    const month = MESES[monthOnly[1].slice(0, 3)];
+    if (month) return iso(fullYear(Number(monthOnly[2])), month, 1);
+  }
+
+  // 2026-10 — ano e mês, mesma regra.
+  const isoMonth = text.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (isoMonth) return iso(Number(isoMonth[1]), Number(isoMonth[2]), 1);
+
+  /*
+   * Último recurso: a data embutida numa frase.
+   *
+   * O modelo às vezes devolve a linha inteira do cabeçalho em vez do valor
+   * ("Belo Horizonte, 08 de outubro de 2026", "quinta-feira, 12/11/2026") —
+   * mais provável justamente nos arquivos sem diagramação, que são o caso que
+   * este código existe para atender. A alternativa aqui é null, então extrair
+   * a data que está claramente escrita ali é sempre melhor.
+   */
+  // O ISO vem primeiro, e o dia-primeiro exige fronteira de não-dígito dos dois
+  // lados: sem isso, "Emitido em 2026-10-08" casava a partir do "26-10-08" e
+  // devolvia 2008-10-26 — uma data plausível, nunca questionada, e errada.
+  const embeddedIso = text.match(/(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/);
+  if (embeddedIso) {
+    return iso(Number(embeddedIso[1]), Number(embeddedIso[2]), Number(embeddedIso[3]));
+  }
+
+  const embedded =
+    text.match(/(?<!\d)(\d{1,2})\s+de\s+([a-z]{3,})\s+de\s+(\d{2,4})(?!\d)/) ??
+    text.match(/(?<!\d)(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?!\d)/);
+  if (embedded) {
+    const mes = MESES[embedded[2].slice(0, 3)] ?? Number(embedded[2]);
+    return iso(fullYear(Number(embedded[3])), mes, Number(embedded[1]));
+  }
+
+  return null;
+}
+
 /** Descarta eventos que o modelo devolveu mal formados, em vez de gravar lixo. */
 function sanitize(analysis: DocumentAnalysis, referenceDate: string): DocumentAnalysis {
-  const events = analysis.events.filter((event) => {
-    if (Number.isNaN(Date.parse(event.startsOn))) return false;
-    if (event.endsOn && Number.isNaN(Date.parse(event.endsOn))) return false;
-    if (event.endsOn && event.endsOn < event.startsOn) return false;
-    // Datas absurdas quase sempre são ano inferido errado.
-    const year = Number(event.startsOn.slice(0, 4));
-    const refYear = Number(referenceDate.slice(0, 4));
-    return year >= refYear - 2 && year <= refYear + 3;
-  });
+  const refYear = Number(referenceDate.slice(0, 4));
+
+  const events = analysis.events
+    .map((event) => ({
+      ...event,
+      startsOn: normalizeDate(event.startsOn),
+      endsOn: normalizeDate(event.endsOn),
+    }))
+    .filter((event): event is typeof event & { startsOn: string } => {
+      if (!event.startsOn) return false;
+      if (event.endsOn && event.endsOn < event.startsOn) return false;
+      // Datas absurdas quase sempre são ano inferido errado.
+      const year = Number(event.startsOn.slice(0, 4));
+      return year >= refYear - 2 && year <= refYear + 3;
+    });
 
   return {
     ...analysis,
+    documentDate: normalizeDate(analysis.documentDate),
+    validUntil: normalizeDate(analysis.validUntil),
     series: analysis.series.filter((s) => SERIE_VALUES.includes(s)),
     events: events.map((e) => ({ ...e, series: e.series.filter((s) => SERIE_VALUES.includes(s)) })),
   };

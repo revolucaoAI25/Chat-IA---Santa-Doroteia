@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { envSecret, envText } from '@/lib/env';
 
@@ -76,4 +76,32 @@ export async function getObject(path: string): Promise<Buffer> {
     throw new Error('Caminho de arquivo inválido.');
   }
   return readFile(target);
+}
+
+/**
+ * Remove o arquivo original.
+ *
+ * Falhar aqui não pode impedir a exclusão do documento: um arquivo órfão no
+ * bucket é lixo barato, enquanto um registro que a administração mandou apagar
+ * e continuou respondendo no chat é um problema de verdade. Por isso devolve
+ * um booleano em vez de estourar.
+ */
+export async function deleteObject(path: string): Promise<boolean> {
+  const config = supabaseConfig();
+
+  try {
+    if (config) {
+      const response = await fetch(
+        `${config.url}/storage/v1/object/${BUCKET}/${encodeURI(path)}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${config.key}` } },
+      );
+      return response.ok;
+    }
+
+    await rm(join(LOCAL_ROOT, path), { force: true });
+    return true;
+  } catch (error) {
+    console.warn('Não foi possível remover o arquivo do storage:', path, error);
+    return false;
+  }
 }

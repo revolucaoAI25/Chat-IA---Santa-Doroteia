@@ -8,6 +8,7 @@ import {
   SEGMENT_LABELS,
   serieLabel,
 } from '@/lib/taxonomy';
+import { DocumentPanel, type EditableDocument } from '@/components/document-panel';
 import type { LibraryDocument } from '@/lib/documents';
 import type { DocumentTypeValue, Role, Segment } from '@/lib/db/schema';
 
@@ -50,6 +51,17 @@ export function DocumentsClient({
   const [query, setQuery] = useState('');
   const [type, setType] = useState<DocumentTypeValue | 'todos'>('todos');
 
+  /*
+   * A correção mora aqui, e não só na Ingestão.
+   *
+   * A Ingestão mostra os doze últimos — serve para conferir um lote recém-subido.
+   * Quando o que se quer é *aquele* comunicado de abril com a data errada, o
+   * caminho é a busca desta tela. É o único lugar do sistema onde se acha um
+   * documento específico no acervo inteiro, então é onde o botão de editar
+   * precisa estar.
+   */
+  const [editing, setEditing] = useState<EditableDocument | null>(null);
+
   // Só os tipos que existem no acervo: um filtro com treze opções, das quais
   // dez não devolvem nada, é ruído.
   const types = useMemo(() => {
@@ -82,7 +94,9 @@ export function DocumentsClient({
         <p className="mt-3 max-w-[40rem] text-[0.9375rem] leading-relaxed text-muted">
           {role === 'aluno'
             ? 'Tudo o que está publicado para a sua série. São exatamente as fontes que o assistente usa para responder a você.'
-            : 'Tudo o que está publicado para o seu acesso. São exatamente as fontes que o assistente usa nas respostas.'}
+            : role === 'admin'
+              ? 'O acervo inteiro do colégio, incluindo o que está fora de vigência — esses vêm marcados e não respondem no chat. Clique em Editar para corrigir ou excluir um documento.'
+              : 'Tudo o que está publicado para o seu acesso. São exatamente as fontes que o assistente usa nas respostas.'}
         </p>
 
         <div className="mt-7">
@@ -143,17 +157,42 @@ export function DocumentsClient({
           <ul className="mt-4 space-y-3">
             {filtered.map((doc) => (
               <li key={doc.id}>
-                <DocumentCard doc={doc} />
+                <DocumentCard
+                  doc={doc}
+                  onEdit={role === 'admin' ? () => setEditing(toEditable(doc)) : undefined}
+                />
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      <DocumentPanel document={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }
 
-function DocumentCard({ doc }: { doc: LibraryDocument }) {
+/** A listagem já traz tudo o que o formulário edita; só muda o formato. */
+function toEditable(doc: LibraryDocument): EditableDocument {
+  return {
+    id: doc.id,
+    title: doc.title,
+    summary: doc.summary,
+    type: doc.type,
+    docNumber: doc.docNumber,
+    segments: doc.segments,
+    series: doc.series,
+    restrictToScope: doc.restrictToScope,
+    anoLetivo: doc.anoLetivo,
+    etapa: doc.etapa,
+    documentDate: doc.documentDate,
+    validFrom: doc.validFrom,
+    validUntil: doc.validUntil,
+    audience: doc.audience as Role[],
+  };
+}
+
+function DocumentCard({ doc, onEdit }: { doc: LibraryDocument; onEdit?: () => void }) {
   const remaining = daysUntil(doc.validUntil);
   const scope = [
     ...doc.series.map(serieLabel),
@@ -165,12 +204,22 @@ function DocumentCard({ doc }: { doc: LibraryDocument }) {
   ];
 
   return (
-    <a
-      href={`/api/documents/${doc.id}/file`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="card group flex gap-3.5 p-4 transition-colors hover:border-navy/40 hover:bg-chip-soft sm:gap-4 sm:p-5"
-    >
+    <div className="card group relative flex gap-3.5 p-4 transition-colors hover:border-navy/40 hover:bg-chip-soft sm:gap-4 sm:p-5">
+      {/*
+        O link cobre o cartão inteiro em vez de envolvê-lo: envolvendo, o botão
+        de editar ficaria dentro de uma âncora — HTML inválido, e um clique nele
+        também baixaria o arquivo. Como sobreposição, o cartão todo continua
+        clicável e o botão, posicionado, fica acima na pilha.
+      */}
+      <a
+        href={`/api/documents/${doc.id}/file`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute inset-0 rounded-[inherit]"
+      >
+        <span className="sr-only">Abrir {doc.title}</span>
+      </a>
+
       <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-chip text-navy">
         <DocumentIcon className="h-[1.125rem] w-[1.125rem]" />
       </span>
@@ -212,7 +261,15 @@ function DocumentCard({ doc }: { doc: LibraryDocument }) {
               ))
             : null}
 
-          {remaining !== null && remaining <= 30 ? (
+          {/* Só o administrador recebe documentos fora de vigência, e o aviso
+              vem junto: sem ele, o cartão pareceria um documento no ar. */}
+          {doc.hidden ? (
+            <span className="chip bg-danger-soft text-danger">
+              {doc.validFrom && doc.validFrom > new Date().toISOString().slice(0, 10)
+                ? `Só aparece em ${formatDate(doc.validFrom)}`
+                : 'Fora de vigência · não responde no chat'}
+            </span>
+          ) : remaining !== null && remaining <= 30 ? (
             <span className="chip bg-warning-soft text-warning">
               {remaining <= 0
                 ? 'Vence hoje'
@@ -232,8 +289,21 @@ function DocumentCard({ doc }: { doc: LibraryDocument }) {
         </span>
       </span>
 
-      <FileIcon className="h-4 w-4 shrink-0 text-navy opacity-40 transition-opacity group-hover:opacity-100" />
-    </a>
+      <span className="relative flex shrink-0 flex-col items-end gap-2">
+        <FileIcon className="h-4 w-4 text-navy opacity-40 transition-opacity group-hover:opacity-100" />
+
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-full border border-line-strong bg-surface px-3 py-1 text-[0.75rem] font-semibold text-ink transition-colors hover:bg-chip"
+          >
+            Editar
+            <span className="sr-only"> {doc.title}</span>
+          </button>
+        ) : null}
+      </span>
+    </div>
   );
 }
 

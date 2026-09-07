@@ -118,10 +118,12 @@ async function IngestTab({ tenantId }: { tenantId: string }) {
       .select({
         id: documents.id,
         title: documents.title,
+        summary: documents.summary,
         type: documents.type,
         docNumber: documents.docNumber,
         segments: documents.segments,
         series: documents.series,
+        restrictToScope: documents.restrictToScope,
         anoLetivo: documents.anoLetivo,
         etapa: documents.etapa,
         documentDate: documents.documentDate,

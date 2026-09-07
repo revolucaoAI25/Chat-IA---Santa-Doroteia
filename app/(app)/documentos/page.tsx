@@ -20,7 +20,14 @@ export default async function DocumentosPage() {
 
   return (
     <>
-      <PageHeader area="Documentos" subtitle="O que o seu acesso pode consultar" />
+      <PageHeader
+        area="Documentos"
+        subtitle={
+          user.role === 'admin'
+            ? 'O acervo inteiro — corrigir e excluir'
+            : 'O que o seu acesso pode consultar'
+        }
+      />
       <DocumentsClient documents={documents} role={user.role} />
     </>
   );

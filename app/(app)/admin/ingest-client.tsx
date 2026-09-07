@@ -19,15 +19,19 @@ import {
   SERIES,
   serieLabel,
 } from '@/lib/taxonomy';
+import { DocumentPanel } from '@/components/document-panel';
 import type { DocumentTypeValue, Role, Segment } from '@/lib/db/schema';
 
 interface RecentDocument {
   id: string;
   title: string;
+  summary: string | null;
   type: DocumentTypeValue;
   docNumber: number | null;
   segments: Segment[];
   series: string[];
+  restrictToScope: boolean;
+  etapa: string | null;
   anoLetivo: number | null;
   /** Data impressa no cabeçalho do documento. Diferente de `createdAt`. */
   documentDate: string | null;
@@ -114,6 +118,9 @@ export function IngestClient({
   const [series, setSeries] = useState<string[]>([]);
   /** Classificar é uma coisa; esconder de quem não é da série é outra. */
   const [restrictToScope, setRestrictToScope] = useState(false);
+
+  /** Documento aberto para correção na gaveta lateral. */
+  const [editing, setEditing] = useState<RecentDocument | null>(null);
 
   const toggleAudience = (role: Role) =>
     setAudience((prev) =>
@@ -624,6 +631,8 @@ export function IngestClient({
           </section>
         ) : null}
 
+        <DocumentPanel document={editing} onClose={() => setEditing(null)} />
+
         {/* Acervo recente */}
         <section className="mt-12">
           <h2 className="font-serif text-[1.5rem] text-ink">Documentos no acervo</h2>
@@ -634,10 +643,22 @@ export function IngestClient({
           <ul className="mt-5 grid gap-3 sm:grid-cols-2">
             {recent.map((doc) => (
               <li key={doc.id} className="card border-t-2 border-t-navy p-4">
+                <div className="flex items-start justify-between gap-3">
                 <p className="eyebrow">
                   {DOCUMENT_TYPE_LABELS[doc.type]}
                   {doc.docNumber ? ` · Nº ${doc.docNumber}` : ''}
                 </p>
+                {/* Corrigir é a operação que essa lista pede: a classificação
+                    automática acerta a maior parte, e "a maior parte" não basta
+                    num acervo oficial. */}
+                <button
+                  type="button"
+                  onClick={() => setEditing(doc)}
+                  className="-mr-1 -mt-1 shrink-0 rounded-full border border-line-strong px-3 py-1 text-[0.75rem] font-semibold text-ink transition-colors hover:bg-chip-soft"
+                >
+                  Editar
+                </button>
+                </div>
                 <p className="mt-1.5 font-serif text-[1.0625rem] leading-snug text-ink">
                   {doc.title}
                 </p>
