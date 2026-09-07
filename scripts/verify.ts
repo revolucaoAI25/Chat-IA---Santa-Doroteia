@@ -6,7 +6,7 @@ import type { SessionUser } from '@/lib/auth/session';
 import { documentVisibilityFilter } from '@/lib/rag/access';
 import { retrieve } from '@/lib/rag/retrieve';
 import { upcomingEvents } from '@/lib/rag/events';
-import { safeValidFrom } from '@/lib/ingest/pipeline';
+import { safeValidFrom, safeValidUntil } from '@/lib/ingest/pipeline';
 
 /**
  * Verificação de fumaça do que não pode quebrar: o recorte de acesso por
@@ -101,6 +101,23 @@ async function main() {
     safeValidFrom('2026-08-01', '2026-09-07') === '2026-08-01',
   );
   check('hoje conta como já vigente', safeValidFrom('2026-09-07', '2026-09-07') === '2026-09-07');
+
+  // A vigência deduzida pela IA tem piso: proposta curta demais é a data do
+  // último evento do texto disfarçada de validade, e faria o documento nascer
+  // quase vencido.
+  const padrao = '2027-09-07';
+  check(
+    'vigência deduzida pela IA a três semanas é descartada',
+    safeValidUntil('2026-09-28', padrao, '2026-09-07') === padrao,
+  );
+  check(
+    'vigência deduzida com folga é respeitada',
+    safeValidUntil('2026-12-20', padrao, '2026-09-07') === '2026-12-20',
+  );
+  check(
+    'sem proposta da IA, vale o padrão de retenção',
+    safeValidUntil(null, padrao, '2026-09-07') === padrao,
+  );
 
   /*
    * A contagem de trechos e eventos por documento é o número que o

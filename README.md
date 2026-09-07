@@ -360,6 +360,24 @@ de `DEFAULT_RETENTION_MONTHS` (12). Fora da janela o documento **continua no
 acervo para auditoria, mas deixa de ser fonte para o assistente** — é por isso
 que o filtro de vigência está na consulta, e não num job de exclusão.
 
+**Duas travas contra a dedução automática errar para o lado de esconder**, que é
+o erro caro: ninguém recebe aviso, a pessoa só ouve "não encontrei".
+
+- `safeValidFrom` **descarta início de vigência no futuro** vindo do modelo.
+  Perguntando "a janela em que a informação vale", o classificador lia
+  "Formatura: 11/12/2026" e devolvia essa data como início — sumindo com o
+  comunicado exatamente durante os meses em que as famílias precisam lê-lo.
+  Documento publicado vale a partir de agora; agendar publicação para depois é
+  decisão humana, e entra por `overrides`.
+- `safeValidUntil` impõe um **piso de 90 dias** à vigência deduzida. Proposta
+  mais curta que isso quase sempre é a data do último evento do texto
+  disfarçada de validade, e faria o documento nascer quase vencido. A escolha
+  explícita do administrador não tem piso nenhum.
+
+Para o acervo ingerido antes dessas travas, o
+[`docs/corrigir-vigencias.sql`](./docs/corrigir-vigencias.sql) mostra o estrago
+e o desfaz.
+
 ---
 
 ## Escolhas de modelo e custo

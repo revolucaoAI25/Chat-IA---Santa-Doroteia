@@ -140,12 +140,13 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
       referenceDate: new Date().toISOString().slice(0, 10),
     });
 
-    // A escolha do administrador vence a dedução da IA, campo a campo.
+    // A escolha do administrador vence a dedução da IA, campo a campo — e sem
+    // piso nenhum: se a secretaria diz que vence semana que vem, vence.
     const overrides = options.overrides ?? {};
     const validUntil =
       overrides.validUntil !== undefined && overrides.validUntil !== null
         ? overrides.validUntil
-        : (analysis.validUntil ?? defaultValidUntil());
+        : safeValidUntil(analysis.validUntil, defaultValidUntil());
 
     const finalValidFrom = safeValidFrom(analysis.validFrom);
 
@@ -297,6 +298,41 @@ function defaultValidUntil(): string {
   const date = new Date();
   date.setMonth(date.getMonth() + DEFAULT_RETENTION_MONTHS);
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Prazo mínimo de prateleira, em dias, para a vigência deduzida pela IA.
+ *
+ * Ninguém sobe um documento que expira em três semanas. Quando o modelo propõe
+ * algo assim, ele não está estimando a validade da informação — está
+ * devolvendo a data do último evento que leu no texto.
+ */
+const MIN_SHELF_DAYS = 90;
+
+/**
+ * Vigência proposta pela IA, com piso.
+ *
+ * A dedução automática é útil: um cronograma da 1ª etapa realmente deixa de
+ * responder "quando é minha prova" na 3ª, e mantê-lo como fonte seria pior que
+ * apagá-lo. Mas o modelo confunde "até quando a informação vale" com "quando
+ * acontece o que está escrito aqui", e aí um comunicado de dezembro nasceria
+ * vencido em janeiro — sumindo com o registro de tudo que aconteceu.
+ *
+ * O piso separa os dois casos sem exigir que o modelo acerte: proposta curta
+ * demais é descartada em favor do padrão de retenção. Vencer é uma decisão que
+ * o tempo toma; nascer quase vencido é sempre erro de leitura.
+ */
+export function safeValidUntil(
+  proposed: string | null,
+  fallback: string,
+  today = new Date().toISOString().slice(0, 10),
+): string {
+  if (!proposed) return fallback;
+
+  const limite = new Date(`${today}T00:00:00Z`);
+  limite.setUTCDate(limite.getUTCDate() + MIN_SHELF_DAYS);
+
+  return proposed >= limite.toISOString().slice(0, 10) ? proposed : fallback;
 }
 
 /**

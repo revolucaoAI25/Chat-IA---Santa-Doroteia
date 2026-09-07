@@ -507,8 +507,16 @@ export function IngestClient({
                 className="field"
               />
               <p className="mt-2 text-[0.75rem] leading-relaxed text-muted">
-                Em branco, a IA deduz a vigência do próprio documento; se não der, vale o padrão de
-                12 meses. Depois dessa data o documento deixa de ser fonte para o assistente.
+                Depois dessa data o documento deixa de ser fonte para o assistente — e some da
+                lista, inclusive para você.
+              </p>
+              <p className="mt-2 text-[0.75rem] leading-relaxed text-muted">
+                Deixando em branco, quem decide é <strong className="text-ink">a IA</strong>, a
+                partir do próprio conteúdo: um cronograma da 1ª etapa vence quando a etapa acaba.
+                Por isso a data que aparece depois costuma não ser de um ano. Ela só cai no padrão
+                de 12 meses quando a IA não consegue deduzir nada — ou quando deduz um prazo curto
+                demais, abaixo de 90 dias, que quase sempre é a data do último evento do texto e
+                não a validade da informação.
               </p>
             </div>
           </div>
