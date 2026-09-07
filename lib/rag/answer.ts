@@ -119,7 +119,9 @@ Escreva para quem está perguntando, na segunda pessoa, do lugar dela na escola.
 - Se a pergunta revela confusão sobre o próprio papel ("preciso entregar as notas?" vindo de um aluno), esclareça em meia frase, sem lição de moral.
 
 COMO CITAR
-Cada trecho vem numerado como [1], [2], ... Marque no texto de onde veio cada afirmação, usando a mesma notação, logo depois da frase. Se juntar duas fontes, marque as duas: [1][3]. Não invente números de referência.
+Cada DOCUMENTO vem numerado como [1], [2], ... — um número por documento, mesmo quando aparecem vários trechos dele, separados por [...].
+Marque no texto de onde veio cada afirmação, usando a mesma notação, logo depois da frase. Se juntar duas fontes, marque as duas: [1][3]. Não invente números de referência.
+**Marque tudo o que usou, e só o que usou.** A lista de fontes que aparece embaixo da resposta é montada a partir dessas marcas: documento que você não marcar não é mostrado, e documento marcado sem ter sido usado polui a conferência. Vêm mais documentos do que os necessários de propósito — os que não responderem à pergunta, simplesmente ignore, sem comentar que os descartou.
 Nomeie o documento pelo que ele é ("o Comunicado nº 240"), nunca pelo mecanismo. Não escreva "segundo o trecho fornecido", "nos documentos disponibilizados", "na base de dados", "de acordo com o contexto": quem lê não sabe que existe busca por trás, e não precisa saber.
 
 COMO RESPONDER
@@ -147,52 +149,34 @@ Os trechos vêm rotulados com a série e o segmento a que o documento se refere.
 - Se a pergunta é sobre a série dela e só existe documento de outra, responda que para a série dela não há documento publicado, e mencione o que existe.
 
 AGENDA
-Os trechos dos documentos são sempre a fonte principal, inclusive para datas. Quando aparecer também um bloco "AGENDA", ele é um índice de datas que já foram extraídas e conferidas — um atalho, não um substituto. Use-o para ordenar e para não deixar passar nada, mas confira contra os trechos e cite o documento de origem. Se uma data aparece nos trechos e não na agenda, ela vale do mesmo jeito: a agenda pode estar incompleta.
+Os documentos são sempre a fonte principal, inclusive para datas. Quando aparecer também um bloco "AGENDA", ele é um índice de datas que já foram extraídas e conferidas — um atalho, não um substituto. Use-o para ordenar e para não deixar passar nada, mas confira contra os trechos e cite o documento de origem. Se uma data aparece nos trechos e não na agenda, ela vale do mesmo jeito: a agenda pode estar incompleta.
 
 SE A SUPOSIÇÃO FOR SUA
 Quando o bloco "SUPOSIÇÃO" aparecer, comece a resposta reconhecendo-a em meia frase natural ("Considerando a 3ª etapa, que é a atual: …") e siga. Não transforme isso num aviso separado nem peça confirmação.`;
 }
 
-function buildContext(chunks: RetrievedChunk[]): string {
-  return chunks
-    .map((chunk, index) => {
-      // A abrangência é explícita nos dois sentidos: dizer "toda a escola"
-      // evita que o modelo trate a ausência de série como omissão e invente um
-      // recorte que o documento não tem.
-      const abrangencia = chunk.series.length
-        ? chunk.series.map(serieLabel).join(', ')
-        : chunk.segments.length
-          ? chunk.segments.map((s) => SEGMENT_LABELS[s as Segment] ?? s).join(', ')
-          : 'toda a escola';
-
-      const label = [
-        documentTypeLabel(chunk.type as DocumentTypeValue),
-        chunk.docNumber ? `nº ${chunk.docNumber}` : null,
-        chunk.title,
-        // A data de emissão fica no rótulo para o modelo saber qual documento
-        // prevalece quando dois se contradizem — a regra existe no prompt, e
-        // sem esta linha ela não teria como ser cumprida.
-        chunk.documentDate ? `emitido em ${chunk.documentDate}` : null,
-        chunk.anoLetivo ? `ano letivo ${chunk.anoLetivo}` : null,
-        `refere-se a: ${abrangencia}`,
-        chunk.page ? `página ${chunk.page}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-
-      return `[${index + 1}] ${label}\n${chunk.content}`;
-    })
-    .join('\n\n---\n\n');
-}
-
 /** Quantos trechos do mesmo documento o painel lateral mostra. */
 const MAX_EXCERPTS = 4;
 
-export function toCitations(chunks: RetrievedChunk[]): Citation[] {
-  // Um documento pode contribuir com vários trechos; a citação é por documento,
-  // mas guarda todos eles — é o que o painel lateral exibe para a pessoa
-  // conferir a resposta sem precisar abrir o PDF.
-  const byDocument = new Map<string, Citation>();
+/** Um documento e todos os trechos dele que entraram no prompt. */
+interface SourceGroup {
+  citation: Citation;
+  chunks: RetrievedChunk[];
+}
+
+/**
+ * Agrupa os trechos por documento — a unidade de citação.
+ *
+ * O contexto do prompt e a lista de fontes saem os dois daqui, e não de duas
+ * varreduras paralelas, porque a numeração precisa bater. Antes o prompt
+ * numerava por TRECHO e a lista de fontes era por DOCUMENTO: bastava um
+ * documento contribuir com dois trechos para o [4] do texto apontar para a
+ * quarta fonte, que já era outro documento. A pessoa clicava para conferir a
+ * data e abria o comunicado errado — o pior tipo de erro num sistema cuja
+ * promessa é justamente poder conferir.
+ */
+function groupByDocument(chunks: RetrievedChunk[]): SourceGroup[] {
+  const byDocument = new Map<string, SourceGroup>();
 
   for (const chunk of chunks) {
     const excerpt = {
@@ -202,30 +186,143 @@ export function toCitations(chunks: RetrievedChunk[]): Citation[] {
 
     const existing = byDocument.get(chunk.documentId);
     if (existing) {
-      if (existing.excerpts!.length < MAX_EXCERPTS) existing.excerpts!.push(excerpt);
+      existing.chunks.push(chunk);
+      if (existing.citation.excerpts!.length < MAX_EXCERPTS) {
+        existing.citation.excerpts!.push(excerpt);
+      }
       continue;
     }
 
     byDocument.set(chunk.documentId, {
-      documentId: chunk.documentId,
-      title: chunk.title,
-      type: chunk.type,
-      docNumber: chunk.docNumber,
-      page: chunk.page,
-      // Resumo curto, para o cartão fechado. O texto inteiro fica em `excerpts`.
-      excerpt: excerpt.text.replace(/\s+/g, ' ').slice(0, 260).trim(),
-      anoLetivo: chunk.anoLetivo,
-      etapa: chunk.etapa,
-      documentDate: chunk.documentDate,
-      series: chunk.series,
-      segments: chunk.segments,
-      validUntil: chunk.validUntil,
-      mimeType: chunk.mimeType,
-      excerpts: [excerpt],
+      chunks: [chunk],
+      citation: {
+        documentId: chunk.documentId,
+        title: chunk.title,
+        type: chunk.type,
+        docNumber: chunk.docNumber,
+        page: chunk.page,
+        // Resumo curto, para o cartão fechado. O texto inteiro fica em `excerpts`.
+        excerpt: excerpt.text.replace(/\s+/g, ' ').slice(0, 260).trim(),
+        anoLetivo: chunk.anoLetivo,
+        etapa: chunk.etapa,
+        documentDate: chunk.documentDate,
+        series: chunk.series,
+        segments: chunk.segments,
+        validUntil: chunk.validUntil,
+        mimeType: chunk.mimeType,
+        excerpts: [excerpt],
+      },
     });
   }
 
   return [...byDocument.values()];
+}
+
+export function toCitations(chunks: RetrievedChunk[]): Citation[] {
+  return groupByDocument(chunks).map((group) => group.citation);
+}
+
+function buildContext(groups: SourceGroup[]): string {
+  return groups
+    .map((group, index) => {
+      const head = group.chunks[0];
+
+      // A abrangência é explícita nos dois sentidos: dizer "toda a escola"
+      // evita que o modelo trate a ausência de série como omissão e invente um
+      // recorte que o documento não tem.
+      const abrangencia = head.series.length
+        ? head.series.map(serieLabel).join(', ')
+        : head.segments.length
+          ? head.segments.map((s) => SEGMENT_LABELS[s as Segment] ?? s).join(', ')
+          : 'toda a escola';
+
+      const label = [
+        documentTypeLabel(head.type as DocumentTypeValue),
+        head.docNumber ? `nº ${head.docNumber}` : null,
+        head.title,
+        // A data de emissão fica no rótulo para o modelo saber qual documento
+        // prevalece quando dois se contradizem — a regra existe no prompt, e
+        // sem esta linha ela não teria como ser cumprida.
+        head.documentDate ? `emitido em ${head.documentDate}` : null,
+        head.anoLetivo ? `ano letivo ${head.anoLetivo}` : null,
+        `refere-se a: ${abrangencia}`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
+      const body = group.chunks
+        .map((chunk) => (chunk.page ? `(página ${chunk.page})\n${chunk.content}` : chunk.content))
+        .join('\n\n[…]\n\n');
+
+      return `[${index + 1}] ${label}\n${body}`;
+    })
+    .join('\n\n---\n\n');
+}
+
+/** Marca de citação: `[3]`, e também o `[1, 3]` que o modelo às vezes escreve. */
+const CITATION_MARK = /\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\]/g;
+
+export interface UsedSources {
+  /** Só os documentos de onde saiu alguma informação, na ordem em que aparecem. */
+  citations: Citation[];
+  /** O texto com as marcas renumeradas para 1..n, sem buracos. */
+  answer: string;
+}
+
+/**
+ * Reduz as fontes ao que a resposta de fato usou.
+ *
+ * A busca é deliberadamente ampla — chega a trazer trinta trechos — porque o
+ * custo de deixar o documento certo de fora é alto. Mas mostrar as trinta
+ * embaixo da resposta transfere para a pessoa o trabalho de descobrir quais
+ * importaram, e enterra a conversa: a cada pergunta ela precisa rolar por uma
+ * pilha de comunicados que nada têm a ver com o assunto.
+ *
+ * As marcas [n] que o modelo escreveu são a resposta a essa pergunta — ele
+ * marcou de onde tirou cada afirmação. Ficam só essas, renumeradas para 1..n
+ * para o texto não sair com [2] e [7] e nenhum [1].
+ *
+ * Se não houver nenhuma marca, devolvemos tudo: o modelo pode ter esquecido de
+ * citar, e é melhor a lista longa do que uma resposta sem procedência nenhuma.
+ */
+export function usedSources(answer: string, all: Citation[]): UsedSources {
+  const order: number[] = [];
+
+  for (const match of answer.matchAll(CITATION_MARK)) {
+    for (const part of match[1].split(/[,;]/)) {
+      const n = Number(part.trim());
+      // Número fora da lista é alucinação do modelo; ignorar aqui é o que
+      // impede que ele crie uma fonte que não existe.
+      if (n >= 1 && n <= all.length && !order.includes(n)) order.push(n);
+    }
+  }
+
+  /*
+   * Sem nenhuma marca válida, a lista fica inteira — o modelo pode ter esquecido
+   * de citar, e uma resposta sem procedência nenhuma é pior que uma lista longa.
+   * O texto ainda passa pela reescrita: um [9] que não existe vira um botão que
+   * não abre nada, e some.
+   */
+  const renumber =
+    order.length === 0
+      ? new Map(all.map((_, i) => [i + 1, i + 1]))
+      : new Map(order.map((old, i) => [old, i + 1]));
+
+  const rewritten = answer.replace(CITATION_MARK, (whole, group: string) => {
+    const kept = group
+      .split(/[,;]/)
+      .map((part) => renumber.get(Number(part.trim())))
+      .filter((n): n is number => n !== undefined);
+    // Cada número em seu próprio par de colchetes: é a única forma que a tela
+    // sabe transformar em botão. Marca que não sobrou nenhuma fonte sai do
+    // texto — deixá-la seria um botão que não abre nada.
+    return kept.map((n) => `[${n}]`).join('');
+  });
+
+  return {
+    citations: order.length === 0 ? all : order.map((n) => all[n - 1]),
+    answer: rewritten,
+  };
 }
 
 export interface AnswerChunkEvent {
@@ -236,6 +333,14 @@ export interface AnswerChunkEvent {
 export interface AnswerDoneEvent {
   type: 'done';
   citations: Citation[];
+  /**
+   * A resposta inteira, com as marcas de citação renumeradas.
+   *
+   * O cliente montou o texto a partir dos deltas, mas só no fim se sabe quais
+   * fontes sobraram — então a última palavra sobre o texto é esta, e é ela que
+   * também vai para o banco.
+   */
+  answer: string;
   usage: { promptTokens: number | null; completionTokens: number | null; model: string };
 }
 
@@ -258,21 +363,22 @@ export interface AnswerOptions {
 /** Gera a resposta em streaming, emitindo eventos consumíveis pela rota HTTP. */
 export async function* streamAnswer(options: AnswerOptions): AsyncGenerator<AnswerEvent> {
   const { user, question, chunks, history, events = [], assumption, settings } = options;
-  const citations = toCitations(chunks);
+  const groups = groupByDocument(chunks);
+  const citations = groups.map((group) => group.citation);
 
   // Sem trecho E sem agenda não há do que responder. Com agenda, ainda dá:
   // "quais as próximas provas" se resolve só com o calendário.
   if (chunks.length === 0 && events.length === 0) {
-    yield {
-      type: 'delta',
-      text:
-        'Não encontrei nada sobre isso nos documentos oficiais que estão disponíveis para você. ' +
-        'Vale tentar reformular a pergunta com o nome do comunicado, a matéria ou o mês — e, se a ' +
-        'informação for recente, pode ser que o documento ainda não tenha sido publicado no sistema.',
-    };
+    const text =
+      'Não encontrei nada sobre isso nos documentos oficiais que estão disponíveis para você. ' +
+      'Vale tentar reformular a pergunta com o nome do comunicado, a matéria ou o mês — e, se a ' +
+      'informação for recente, pode ser que o documento ainda não tenha sido publicado no sistema.';
+
+    yield { type: 'delta', text };
     yield {
       type: 'done',
       citations: [],
+      answer: text,
       usage: { promptTokens: null, completionTokens: null, model: 'sem-fonte' },
     };
     return;
@@ -282,10 +388,16 @@ export async function* streamAnswer(options: AnswerOptions): AsyncGenerator<Answ
   const etapa = currentEtapa(settings);
 
   if (DEMO_MODE) {
-    yield* demoAnswer(chunks, events);
+    let demo = '';
+    for await (const event of demoAnswer(chunks, events)) {
+      demo += event.text;
+      yield event;
+    }
+    const used = usedSources(demo, citations);
     yield {
       type: 'done',
-      citations,
+      citations: used.citations,
+      answer: used.answer,
       usage: { promptTokens: null, completionTokens: null, model: 'demo' },
     };
     return;
@@ -299,8 +411,8 @@ export async function* streamAnswer(options: AnswerOptions): AsyncGenerator<Answ
         `complementa os trechos, não os substitui):\n${formatEventsForPrompt(events)}`,
     );
   }
-  if (chunks.length > 0) {
-    sections.push(`TRECHOS DOS DOCUMENTOS OFICIAIS:\n\n${buildContext(chunks)}`);
+  if (groups.length > 0) {
+    sections.push(`DOCUMENTOS OFICIAIS:\n\n${buildContext(groups)}`);
   }
   if (assumption) {
     sections.push(`SUPOSIÇÃO: ${assumption}`);
@@ -324,19 +436,27 @@ export async function* streamAnswer(options: AnswerOptions): AsyncGenerator<Answ
 
   let promptTokens: number | null = null;
   let completionTokens: number | null = null;
+  let answer = '';
 
   for await (const part of stream) {
     const delta = part.choices[0]?.delta?.content;
-    if (delta) yield { type: 'delta', text: delta };
+    if (delta) {
+      answer += delta;
+      yield { type: 'delta', text: delta };
+    }
     if (part.usage) {
       promptTokens = part.usage.prompt_tokens;
       completionTokens = part.usage.completion_tokens;
     }
   }
 
+  // Só agora dá para saber quais documentos a resposta usou de verdade.
+  const used = usedSources(answer, citations);
+
   yield {
     type: 'done',
-    citations,
+    citations: used.citations,
+    answer: used.answer,
     usage: { promptTokens, completionTokens, model: AI_MODELS.chat },
   };
 }

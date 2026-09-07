@@ -6,6 +6,7 @@ import {
   AlertIcon,
   ArrowUpIcon,
   ArrowUpRightIcon,
+  ChevronDownIcon,
   FileIcon,
   SparkleIcon,
   ThumbDownIcon,
@@ -138,6 +139,21 @@ export function ChatClient({
   /** Fonte aberta no painel lateral, com o número da citação. */
   const [source, setSource] = useState<{ citation: Citation; index: number } | null>(null);
 
+  /**
+   * Quais respostas estão com a lista de fontes aberta.
+   *
+   * Fechada por padrão, e a escolha é por mensagem: abrir as fontes de uma
+   * resposta não deve mexer na leitura das outras.
+   */
+  const [openSources, setOpenSources] = useState<Set<string>>(new Set());
+
+  const toggleSources = (id: string) =>
+    setOpenSources((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -225,7 +241,11 @@ export function ChatClient({
             } else if (event.type === 'clarify') {
               patch({ clarifyOptions: event.options ?? [] });
             } else if (event.type === 'done') {
+              // O texto final substitui o acumulado: as marcas de citação são
+              // renumeradas no servidor depois que se sabe quais documentos a
+              // resposta realmente usou.
               patch({
+                content: event.answer || answer,
                 citations: event.citations,
                 messageId: event.messageId,
                 pending: false,
@@ -425,84 +445,106 @@ export function ChatClient({
                       </div>
                     ) : null}
 
-                    {item.citations.length > 0 ? (
-                      <section className="mt-5">
-                        <p className="eyebrow-muted mb-2.5">
-                          {item.citations.length === 1
-                            ? 'Documento consultado'
-                            : `${item.citations.length} documentos consultados`}
-                        </p>
-                        <ul className="space-y-2">
-                          {item.citations.map((citation, index) => (
-                            <li key={citation.documentId}>
-                              {/*
-                                Botão, e não link direto para o PDF: abrir o
-                                arquivo era um salto grande demais para quem só
-                                quer conferir uma frase. O painel mostra o
-                                trecho primeiro, e de lá sai o PDF.
-                              */}
-                              <button
-                                type="button"
-                                onClick={() => setSource({ citation, index: index + 1 })}
-                                className="card group flex w-full gap-3 p-3.5 text-left transition-colors hover:border-navy/40 hover:bg-chip-soft"
-                              >
-                                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-chip text-[0.6875rem] font-bold text-navy">
-                                  {index + 1}
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="eyebrow block">
-                                    {DOCUMENT_TYPE_LABELS[citation.type as DocumentTypeValue] ??
-                                      'Documento'}
-                                    {citation.docNumber ? ` · Nº ${citation.docNumber}` : ''}
-                                    {citation.page ? ` · pág. ${citation.page}` : ''}
-                                  </span>
-                                  <span className="mt-1 block font-serif text-[1.0625rem] leading-snug text-ink">
-                                    {citation.title}
-                                  </span>
-                                  <span className="mt-1.5 block text-[0.8125rem] leading-snug text-muted">
-                                    {citation.excerpt}…
-                                  </span>
-                                </span>
-                                <FileIcon className="h-4 w-4 shrink-0 text-navy opacity-40 transition-opacity group-hover:opacity-100" />
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
+                    {/*
+                      Rodapé único da resposta: fontes de um lado, sinal de
+                      qualidade do outro, tudo na mesma linha discreta.
+
+                      As fontes vinham como uma pilha de cartões com título em
+                      serifa e três linhas de trecho cada. Com a busca ampla,
+                      isso enterrava a conversa: para chegar à próxima pergunta
+                      era preciso rolar por uma parede de comunicados. O
+                      conteúdo continua todo aqui, a um clique — e a lista já
+                      chega enxuta, só com os documentos que a resposta citou.
+                    */}
+                    {item.citations.length > 0 || (item.messageId && !item.pending) ? (
+                      <footer className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        {item.citations.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleSources(item.id)}
+                            aria-expanded={openSources.has(item.id)}
+                            aria-controls={`fontes-${item.id}`}
+                            className="-ml-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[0.75rem] font-semibold text-muted transition-colors hover:bg-chip-soft hover:text-ink"
+                          >
+                            <ChevronDownIcon
+                              className={`h-3.5 w-3.5 transition-transform ${
+                                openSources.has(item.id) ? 'rotate-180' : ''
+                              }`}
+                            />
+                            {item.citations.length === 1
+                              ? '1 fonte'
+                              : `${item.citations.length} fontes`}
+                          </button>
+                        ) : null}
+
+                        {/* Sinal de qualidade. As respostas marcadas como não
+                            úteis alimentam o relatório de lacunas do acervo. */}
+                        {item.messageId && !item.pending ? (
+                          <span className="ml-auto flex items-center gap-1">
+                            {item.feedback ? (
+                              <span className="text-[0.75rem] text-muted">
+                                {item.feedback === 'util'
+                                  ? 'Obrigado! Isso ajuda a calibrar o assistente.'
+                                  : 'Anotado — a coordenação vê o que o acervo não responde.'}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="mr-1 text-[0.75rem] text-muted">Ajudou?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => void sendFeedback(item, 'util')}
+                                  aria-label="Resposta útil"
+                                  className="rounded-md p-1.5 text-muted transition-colors hover:bg-chip-soft hover:text-success"
+                                >
+                                  <ThumbUpIcon className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void sendFeedback(item, 'nao_util')}
+                                  aria-label="Resposta não ajudou"
+                                  className="rounded-md p-1.5 text-muted transition-colors hover:bg-chip-soft hover:text-danger"
+                                >
+                                  <ThumbDownIcon className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </span>
+                        ) : null}
+                      </footer>
                     ) : null}
 
-                    {/* Sinal de qualidade. As respostas marcadas como não úteis
-                        são o que alimenta o relatório de lacunas do acervo. */}
-                    {item.messageId && !item.pending ? (
-                      <div className="mt-4 flex items-center gap-2">
-                        {item.feedback ? (
-                          <p className="text-[0.75rem] text-muted">
-                            {item.feedback === 'util'
-                              ? 'Obrigado! Isso ajuda a calibrar o assistente.'
-                              : 'Anotado. A coordenação vê o que o acervo ainda não responde.'}
-                          </p>
-                        ) : (
-                          <>
-                            <span className="text-[0.75rem] text-muted">Esta resposta ajudou?</span>
+                    {/*
+                      Aberta, a lista é uma linha por documento — sem trecho.
+                      Quem quer conferir o texto clica e o painel lateral abre
+                      com os trechos e o PDF; repetir o excerto aqui recriaria a
+                      parede que este desenho existe para evitar.
+                    */}
+                    {item.citations.length > 0 && openSources.has(item.id) ? (
+                      <ul id={`fontes-${item.id}`} className="mt-1.5 space-y-1">
+                        {item.citations.map((citation, index) => (
+                          <li key={citation.documentId}>
                             <button
                               type="button"
-                              onClick={() => void sendFeedback(item, 'util')}
-                              aria-label="Resposta útil"
-                              className="rounded-md p-1.5 text-muted transition-colors hover:bg-chip-soft hover:text-success"
+                              onClick={() => setSource({ citation, index: index + 1 })}
+                              className="group flex w-full items-center gap-2.5 rounded-lg border border-line px-3 py-2 text-left transition-colors hover:border-navy/40 hover:bg-chip-soft"
                             >
-                              <ThumbUpIcon className="h-4 w-4" />
+                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-chip text-[0.6875rem] font-bold text-navy">
+                                {index + 1}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-ink">
+                                {citation.title}
+                                <span className="text-muted">
+                                  {citation.docNumber ? ` · nº ${citation.docNumber}` : ''}
+                                  {' · '}
+                                  {DOCUMENT_TYPE_LABELS[citation.type as DocumentTypeValue] ??
+                                    'Documento'}
+                                </span>
+                              </span>
+                              <FileIcon className="h-3.5 w-3.5 shrink-0 text-navy opacity-40 transition-opacity group-hover:opacity-100" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => void sendFeedback(item, 'nao_util')}
-                              aria-label="Resposta não ajudou"
-                              className="rounded-md p-1.5 text-muted transition-colors hover:bg-chip-soft hover:text-danger"
-                            >
-                              <ThumbDownIcon className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                   </article>
                 ),

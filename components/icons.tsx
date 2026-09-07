@@ -175,6 +175,15 @@ export function DownloadIcon({ className }: Props) {
   );
 }
 
+/** Aponta para baixo; quem abre gira 180° por CSS. */
+export function ChevronDownIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base} strokeWidth={2}>
+      <path d="m5.5 8 4.5 4.5L14.5 8" />
+    </svg>
+  );
+}
+
 export function FileIcon({ className }: Props) {
   return (
     <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>

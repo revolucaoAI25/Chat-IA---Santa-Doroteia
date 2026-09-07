@@ -158,6 +158,7 @@ export async function POST(request: Request) {
           send({
             type: 'done',
             citations: [],
+            answer: text,
             messageId: saved.id,
             usage: { promptTokens: null, completionTokens: null, model: 'planner' },
           });
@@ -194,6 +195,11 @@ export async function POST(request: Request) {
             answer += event.text;
             send(event);
           } else {
+            // O texto gravado é o do evento final, não o acumulado: as marcas de
+            // citação são renumeradas depois que se sabe quais fontes ficaram, e
+            // o banco tem de guardar a versão que a pessoa viu.
+            answer = event.answer || answer;
+
             const [saved] = await db
               .insert(messages)
               .values({
