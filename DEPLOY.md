@@ -184,18 +184,32 @@ para uma fila — está anotado como próximo passo no README.
 O banco ainda está vazio: não há tabelas nem usuários. A aplicação cria tudo
 sozinha.
 
-Abra o **terminal do seu computador** (no Mac: Spotlight → "Terminal"; no
-Windows: menu Iniciar → "PowerShell") e cole a linha abaixo, trocando os dois
-valores em maiúsculas:
+A chamada abaixo é o que dispara a criação. Escolha a versão do seu sistema e
+troque os dois valores em maiúsculas.
+
+**Windows (PowerShell)** — menu Iniciar, digite "PowerShell":
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "https://SEU-ENDERECO/api/setup?token=SEU_SETUP_TOKEN"
+```
+
+> No PowerShell, `curl` é apelido de `Invoke-WebRequest` e **não** aceita `-X`.
+> Se você colar um comando `curl -X POST`, o erro é
+> *"Não é possível localizar um parâmetro que coincida com o nome de parâmetro 'X'"*.
+> Use o comando acima, ou escreva `curl.exe` (com o `.exe`), que chama o curl
+> de verdade.
+
+**Mac ou Linux** — Terminal:
 
 ```bash
 curl -X POST "https://SEU-ENDERECO/api/setup?token=SEU_SETUP_TOKEN"
 ```
 
-> Não é o mesmo que "rodar o projeto localmente" — é só uma chamada ao site, e
-> qualquer ferramenta que faça uma requisição POST serve. Se preferir não usar o
-> terminal, dá para fazer pelo <https://reqbin.com>: cole a URL completa (com o
-> token), escolha o método **POST** e clique em Send.
+**Sem terminal**, se preferir: em <https://reqbin.com>, cole a URL completa
+(com o token), escolha o método **POST** e clique em Send.
+
+> Isto não é "rodar o projeto no seu computador" — é só uma requisição ao site
+> que já está no ar. Qualquer ferramenta que faça um POST serve.
 
 A resposta esperada:
 
@@ -219,6 +233,7 @@ duplicado nem tem a senha sobrescrita.
 |---|---|
 | `404 Não encontrado` | O `SETUP_TOKEN` não bate, ou a variável não foi salva. Confira na Vercel e **refaça o deploy** — variáveis novas só valem no próximo build. |
 | `DATABASE_URL não está definida` ao abrir o site | A variável não chegou ao ambiente de Production. Confira na Vercel e refaça o deploy. |
+| `Não é possível localizar um parâmetro ... 'X'` | Você usou `curl -X` no PowerShell, onde `curl` é apelido de `Invoke-WebRequest`. Use o `Invoke-RestMethod` acima, ou `curl.exe`. |
 | `As migrações precisam de uma conexão em modo sessão` | Faltou a `DATABASE_URL_DIRECT`, ou ela ficou com a porta 6543. Use o **Session pooler**. |
 | `connect ENETUNREACH` ou trava sem responder | Você usou a **Direct connection**. No plano gratuito ela é IPv6 e a Vercel não alcança. Troque pelo **Session pooler**. |
 | `type "vector" does not exist` | A extensão do passo 1.2 não foi ativada. |
