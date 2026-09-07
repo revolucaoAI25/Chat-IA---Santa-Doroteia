@@ -202,16 +202,31 @@ fica em `a_revisar` e **não é apresentado como fato** até alguém conferir.
 
 ### A busca é híbrida, de propósito
 
-`lib/rag/retrieve.ts` roda **duas** buscas e funde os resultados com
-Reciprocal Rank Fusion:
+`lib/rag/retrieve.ts` roda **três** buscas em paralelo, 30 candidatos cada, e
+funde as listas com Reciprocal Rank Fusion (k = 60), ficando com os 8 melhores
+trechos:
 
 - **vetorial** (`pgvector`, cosseno, índice HNSW) — entende *"quando é a prova
-  de matemática?"*, mas erra *"Comunicado 112"*;
-- **textual** (`tsvector` em português, índice GIN) — acerta o código exato e
-  ignora sinônimos.
+  de matemática?"* e sinônimos, mas erra *"Comunicado 112"*;
+- **lexical estrita** (`websearch_to_tsquery`, que une os termos com AND) —
+  acerta o código exato, mas devolve zero assim que a consulta cresce;
+- **lexical ampla** (os mesmos radicais unidos por OR, ordenados por
+  `ts_rank`) — sobrevive à consulta longa que o planejador produz; casar mais
+  termos sobe na lista.
 
-As duas falham em situações opostas. O RRF combina as listas por posição, sem
-precisar calibrar pesos entre escalas de score incompatíveis.
+As três falham em situações opostas. O RRF combina por posição, sem precisar
+calibrar pesos entre escalas de score incompatíveis: um trecho bem colocado em
+duas listas ganha do primeiro colocado de uma só.
+
+O índice lexical usa uma configuração própria, `portuguese_unaccent`, que passa
+o `unaccent` antes do radicalizador (migração `0004`). Sem ela a busca era
+sensível a acento — *"recuperacao"* digitado no celular não encontrava
+*"recuperação"* no documento, e a metade lexical simplesmente não contribuía.
+
+`npm run busca` mostra, para cada perfil, o que um conjunto de perguntas reais
+recupera e em que posição. É a forma mais rápida de responder à pergunta que
+importa antes de julgar a redação da resposta: **o trecho certo chegou ao
+prompt?**
 
 ### Controle de acesso
 
@@ -408,5 +423,6 @@ mexer:
 | `npm run db:migrate` | Aplica os `.sql` de `drizzle/` em ordem |
 | `npm run db:seed` | Recria usuários e acervo de demonstração |
 | `npm run setup` | `db:migrate` + `db:seed` |
+| `npm run busca` | Sonda de recuperação: o que cada perfil recupera, e em que posição |
 | `npx tsx scripts/verify.ts` | Confere acesso por perfil, vigência, busca e agenda |
 | `npm run typecheck` | `tsc --noEmit` |

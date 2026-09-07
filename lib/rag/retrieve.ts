@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { embedQuery } from '@/lib/ai/embeddings';
 import type { SessionUser } from '@/lib/auth/session';
@@ -45,12 +45,31 @@ interface RawRow extends Record<string, unknown> {
 }
 
 /**
+ * Configuração de busca própria: `unaccent` antes do radicalizador português.
+ *
+ * Precisa ser a MESMA usada na coluna gerada `content_tsv` (ver
+ * drizzle/0004). Com a `portuguese` crua, "matematica" digitado sem acento no
+ * celular não casava com "matemática" no documento.
+ */
+const TS_CONFIG = 'public.portuguese_unaccent';
+
+/**
  * Busca híbrida com controle de acesso.
  *
- * Duas estratégias porque elas falham em situações opostas: o vetor entende
- * "quando é a prova de matemática?" mas erra "Comunicado 112"; o texto integral
- * acerta o código exato e ignora sinônimos. O RRF combina as duas listas sem
- * precisar calibrar pesos entre escalas de score incompatíveis.
+ * Três listas, porque cada uma falha onde as outras acertam:
+ *
+ * - **vetor** entende "quando é a prova de matemática?" e sinônimos, mas erra
+ *   códigos exatos como "Comunicado 112";
+ * - **lexical estrita** (`websearch_to_tsquery`, que junta os termos com AND)
+ *   acerta o código exato — mas devolve zero assim que a consulta cresce, e o
+ *   planejador justamente alonga a pergunta ("data da prova de história do 7º
+ *   ano na etapa atual" exige os sete radicais no mesmo trecho);
+ * - **lexical ampla** (os mesmos termos com OR, ordenados por `ts_rank`)
+ *   sobrevive à consulta longa: quem casa mais termos sobe.
+ *
+ * O RRF combina as três por posição, sem precisar calibrar pesos entre escalas
+ * de score incompatíveis. Um trecho bem colocado em duas listas ganha de um
+ * primeiro colocado numa só — que é exatamente o comportamento desejado.
  */
 export async function retrieve(
   user: SessionUser,
@@ -75,7 +94,35 @@ export async function retrieve(
     d.series        AS series
   `;
 
-  const [vectorHits, lexicalHits] = await Promise.all([
+  const strict = sql`websearch_to_tsquery(${TS_CONFIG}::regconfig, ${query})`;
+
+  /*
+   * Os termos da consulta unidos por OR.
+   *
+   * Sai do próprio `to_tsvector`, e não de um split por espaço: assim os
+   * radicais são exatamente os mesmos que foram indexados, as palavras vazias
+   * ("de", "do", "na") já vêm descartadas, e `quote_literal` protege o
+   * `to_tsquery` de qualquer caractere estranho. Consulta só de palavras vazias
+   * devolve NULL, e `@@ NULL` simplesmente não casa com nada — sem erro.
+   */
+  const broad = sql`
+    to_tsquery(
+      ${TS_CONFIG}::regconfig,
+      (SELECT string_agg(quote_literal(lexeme), ' | ')
+         FROM unnest(tsvector_to_array(to_tsvector(${TS_CONFIG}::regconfig, ${query}))) AS lexeme)
+    )
+  `;
+
+  const lexical = (tsquery: SQL) => db.execute<RawRow>(sql`
+    SELECT ${selection}
+    FROM document_chunks c
+    JOIN documents d ON d.id = c.document_id
+    WHERE ${visibility} AND c.content_tsv @@ ${tsquery}
+    ORDER BY ts_rank(c.content_tsv, ${tsquery}) DESC
+    LIMIT ${CANDIDATES}
+  `);
+
+  const [vectorHits, strictHits, broadHits] = await Promise.all([
     db.execute<RawRow>(sql`
       SELECT ${selection}
       FROM document_chunks c
@@ -84,18 +131,14 @@ export async function retrieve(
       ORDER BY c.embedding <=> ${vectorLiteral}::vector
       LIMIT ${CANDIDATES}
     `),
-    db.execute<RawRow>(sql`
-      SELECT ${selection}
-      FROM document_chunks c
-      JOIN documents d ON d.id = c.document_id
-      WHERE ${visibility}
-        AND c.content_tsv @@ websearch_to_tsquery('portuguese', ${query})
-      ORDER BY ts_rank(c.content_tsv, websearch_to_tsquery('portuguese', ${query})) DESC
-      LIMIT ${CANDIDATES}
-    `),
+    lexical(strict),
+    lexical(broad),
   ]);
 
-  return fuse([toCandidates(vectorHits), toCandidates(lexicalHits)], limit);
+  return fuse(
+    [toCandidates(vectorHits), toCandidates(strictHits), toCandidates(broadHits)],
+    limit,
+  );
 }
 
 function toCandidates(rows: Iterable<RawRow>): Candidate[] {

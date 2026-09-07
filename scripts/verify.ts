@@ -104,6 +104,27 @@ async function main() {
     porNumero[0]?.title ?? 'nada encontrado',
   );
 
+  // Ninguém digita acento no celular. Antes da migração 0004 a metade lexical
+  // era sensível a acento e devolvia zero justamente aqui.
+  const semAcento = await retrieve(aluno7, 'recuperacao final matematica');
+  check(
+    'pergunta digitada sem acento encontra o documento acentuado',
+    semAcento.some((c) => c.title.includes('Recuperação')),
+    semAcento[0]?.title ?? 'nada encontrado',
+  );
+
+  // O planejador alonga a pergunta para resolver o follow-up. A busca precisa
+  // sobreviver a isso: com AND puro entre sete radicais, o retorno seria zero.
+  const consultaLonga = await retrieve(
+    aluno7,
+    'data e horario da prova de matematica do 7 ano na terceira etapa de 2026',
+  );
+  check(
+    'consulta longa (reescrita pelo planejador) ainda recupera',
+    consultaLonga.some((c) => c.title.includes('Cronograma de Avaliações')),
+    `${consultaLonga.length} trecho(s), 1º = ${consultaLonga[0]?.title ?? '—'}`,
+  );
+
   const vazamento = await retrieve(aluno7, 'prazo para lançamento de notas conselho de classe');
   check(
     'a busca do aluno nunca devolve trecho do documento restrito',
