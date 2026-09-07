@@ -272,9 +272,10 @@ export function IngestClient({
             })}
           </div>
           <p className="mt-3 text-[0.8125rem] leading-relaxed text-muted">
-            Sem nenhum marcado, os documentos valem para toda a escola. A série e o segmento saem
-            da classificação automática e recortam o acesso dos alunos — inclusive no que a IA
-            busca.
+            Sem nenhum marcado, os documentos valem para toda a escola. Este é o campo que{' '}
+            <strong className="font-semibold text-ink">de fato esconde</strong>: quem não estiver
+            marcado não vê o documento na lista nem recebe resposta baseada nele. Vale para todos
+            os arquivos deste envio.
           </p>
 
           <div className="mt-7 border-t border-line pt-6">
