@@ -6,6 +6,7 @@ import { tenants, users } from '@/lib/db/schema';
 import { runMigrations } from '@/lib/db/migrate';
 import { hashPassword } from '@/lib/auth/password';
 import { DEFAULT_ETAPA_ENDS, DEFAULT_TIMEZONE, DEFAULT_YEAR_START } from '@/lib/academic-calendar';
+import { envSecret } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -23,7 +24,7 @@ export const maxDuration = 120;
  */
 
 function authorized(request: Request): boolean {
-  const expected = process.env.SETUP_TOKEN;
+  const expected = envSecret('SETUP_TOKEN');
   if (!expected || expected.length < 16) return false;
 
   const provided = new URL(request.url).searchParams.get('token') ?? '';
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
      * do Supabase a conexão direta só responde por IPv6, e a Vercel não fala
      * IPv6 — o pedido nem chega ao banco.
      */
-    const migrationUrl = process.env.DATABASE_URL_DIRECT ?? url;
+    const migrationUrl = envSecret('DATABASE_URL_DIRECT') ?? url;
     if (migrationUrl.includes(':6543')) {
       return NextResponse.json(
         {
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
 
     /* 3. Administrador ------------------------------------------------------ */
     const email = process.env.SETUP_ADMIN_EMAIL?.trim().toLowerCase();
-    const password = process.env.SETUP_ADMIN_PASSWORD;
+    const password = envSecret('SETUP_ADMIN_PASSWORD');
     const name = process.env.SETUP_ADMIN_NAME?.trim() || 'Administrador';
     const matricula = process.env.SETUP_ADMIN_MATRICULA?.trim().toUpperCase() || 'ADM001';
 

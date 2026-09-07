@@ -19,6 +19,7 @@ import { documentTypeLabel } from '@/lib/taxonomy';
 import { DEMO_MODE } from '@/lib/ai/provider';
 import { currentAnoLetivo } from '@/lib/academic-calendar';
 import { SEED_DOCUMENTS } from './seed-data';
+import { envText } from '@/lib/env';
 
 /**
  * Popula o banco com o tenant, os usuários de teste e o acervo de demonstração.
@@ -51,7 +52,7 @@ async function main() {
     })
     .returning();
 
-  const password = process.env.SEED_PASSWORD ?? 'santadoroteia';
+  const password = envText('SEED_PASSWORD', 'santadoroteia');
   const passwordHash = await hashPassword(password);
 
   const seedUsers = [

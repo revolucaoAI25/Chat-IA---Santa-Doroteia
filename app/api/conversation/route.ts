@@ -3,11 +3,12 @@ import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { conversations, messages } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
+import { envNumber } from '@/lib/env';
 
 export const runtime = 'nodejs';
 
 /** Depois disto a thread é considerada encerrada — igual à regra do /api/chat. */
-const CONVERSATION_IDLE_HOURS = Number(process.env.CONVERSATION_IDLE_HOURS ?? 24);
+const CONVERSATION_IDLE_HOURS = envNumber('CONVERSATION_IDLE_HOURS', 24);
 
 /**
  * Devolve as mensagens de uma conversa em andamento.

@@ -9,6 +9,7 @@ import { streamAnswer } from '@/lib/rag/answer';
 import { planQuery } from '@/lib/rag/plan';
 import { upcomingEvents } from '@/lib/rag/events';
 import { checkChatRateLimit, touchUser } from '@/lib/rate-limit';
+import { envNumber } from '@/lib/env';
 
 // A busca vetorial e a geração precisam do runtime Node (driver Postgres).
 export const runtime = 'nodejs';
@@ -19,7 +20,7 @@ export const maxDuration = 60;
  * nova. Retomar uma thread de ontem traria contexto que a pessoa já esqueceu —
  * e a IA trataria como se a conversa nunca tivesse parado.
  */
-const CONVERSATION_IDLE_HOURS = Number(process.env.CONVERSATION_IDLE_HOURS ?? 24);
+const CONVERSATION_IDLE_HOURS = envNumber('CONVERSATION_IDLE_HOURS', 24);
 
 /**
  * Teto de segurança do contexto, em caracteres.

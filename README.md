@@ -478,6 +478,8 @@ mexer:
 | `npm run db:seed` | Recria usuários e acervo de demonstração |
 | `npm run setup` | `db:migrate` + `db:seed` |
 | `npm run busca` | Sonda de recuperação: o que cada perfil recupera, e em que posição |
-| `npx tsx scripts/verify.ts` | Confere acesso por perfil, vigência, busca e agenda |
+| `npm run verify` | Roda as três verificações abaixo, em ordem |
+| `npx tsx scripts/verify-env.ts` | Confere que variável vazia cai no padrão (não precisa de banco) |
 | `npx tsx scripts/verify-render.tsx` | Confere o renderizador de markdown do chat |
+| `npx tsx scripts/verify.ts` | Confere acesso por perfil, vigência, busca e agenda |
 | `npm run typecheck` | `tsc --noEmit` |

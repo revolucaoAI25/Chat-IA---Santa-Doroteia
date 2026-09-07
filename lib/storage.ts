@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { envSecret, envText } from '@/lib/env';
 
 /**
  * Guarda o arquivo original para que o chat possa oferecer o PDF da fonte.
@@ -11,11 +12,11 @@ import { dirname, join, resolve } from 'node:path';
  */
 
 const LOCAL_ROOT = resolve(process.cwd(), 'storage');
-const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'documentos';
+const BUCKET = envText('SUPABASE_STORAGE_BUCKET', 'documentos');
 
 function supabaseConfig() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = envSecret('SUPABASE_URL');
+  const key = envSecret('SUPABASE_SERVICE_ROLE_KEY');
   return url && key ? { url: url.replace(/\/$/, ''), key } : null;
 }
 

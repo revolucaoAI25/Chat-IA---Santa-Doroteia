@@ -16,9 +16,10 @@ import { documentTypeLabel, serieLabel } from '@/lib/taxonomy';
 import { chunkPages } from './chunk';
 import { EVENT_AUTO_APPROVE_THRESHOLD, analyzeDocument } from './classify';
 import { extractDocument } from './extract';
+import { envNumber } from '@/lib/env';
 
 /** Vigência padrão quando nem o documento nem o administrador definem uma. */
-const DEFAULT_RETENTION_MONTHS = Number(process.env.DEFAULT_RETENTION_MONTHS ?? 12);
+const DEFAULT_RETENTION_MONTHS = envNumber('DEFAULT_RETENTION_MONTHS', 12);
 
 /**
  * Correções que o administrador impõe sobre a classificação automática.

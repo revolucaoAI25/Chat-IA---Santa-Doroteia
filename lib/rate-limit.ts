@@ -1,6 +1,7 @@
 import { and, count, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { conversations, messages } from '@/lib/db/schema';
+import { envNumber } from '@/lib/env';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -9,8 +10,8 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-const WINDOW_MINUTES = Number(process.env.CHAT_RATE_WINDOW_MINUTES ?? 10);
-const MAX_QUESTIONS = Number(process.env.CHAT_RATE_MAX_QUESTIONS ?? 20);
+const WINDOW_MINUTES = envNumber('CHAT_RATE_WINDOW_MINUTES', 10);
+const MAX_QUESTIONS = envNumber('CHAT_RATE_MAX_QUESTIONS', 20);
 
 /**
  * Limite de perguntas por usuário numa janela deslizante.
