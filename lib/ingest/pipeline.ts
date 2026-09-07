@@ -147,6 +147,8 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
         ? overrides.validUntil
         : (analysis.validUntil ?? defaultValidUntil());
 
+    const finalValidFrom = safeValidFrom(analysis.validFrom);
+
     const finalType = overrides.type ?? analysis.type;
     const finalSegments = overrides.segments ?? analysis.segments;
     const finalSeries = overrides.series ?? analysis.series;
@@ -173,7 +175,7 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
         restrictToScope: finalRestrict,
         etapa: finalEtapa,
         anoLetivo: finalAnoLetivo,
-        validFrom: analysis.validFrom,
+        validFrom: finalValidFrom,
         validUntil,
         audience: options.audience,
         sourceKind: 'upload',
@@ -295,6 +297,31 @@ function defaultValidUntil(): string {
   const date = new Date();
   date.setMonth(date.getMonth() + DEFAULT_RETENTION_MONTHS);
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Descarta um início de vigência no futuro vindo da classificação automática.
+ *
+ * O filtro de visibilidade esconde documento cuja vigência ainda não começou —
+ * o que é correto como recurso e desastroso como acidente. E era acidente:
+ * pedindo "a janela em que a informação vale", o classificador lia "Formatura:
+ * 11/12/2026" e devolvia validFrom 11/12, o que sumia com o comunicado
+ * exatamente durante os meses em que as famílias precisam lê-lo. O documento
+ * não dava erro nem reaparecia; simplesmente não existia para ninguém.
+ *
+ * A regra aqui é a da secretaria: documento publicado vale a partir de agora.
+ * Agendar publicação para depois é decisão humana, e quando existir tela para
+ * isso ela entra por `overrides`, não pela dedução do modelo.
+ *
+ * Comparação em texto porque `YYYY-MM-DD` já ordena cronologicamente, e
+ * converter para `Date` traria o erro de fuso de volta.
+ */
+export function safeValidFrom(
+  validFrom: string | null,
+  today = new Date().toISOString().slice(0, 10),
+): string | null {
+  if (!validFrom) return null;
+  return validFrom > today ? null : validFrom;
 }
 
 function safeName(fileName: string): string {

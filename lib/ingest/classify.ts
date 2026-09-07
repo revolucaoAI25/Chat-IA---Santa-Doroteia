@@ -91,7 +91,8 @@ REGRAS DE CLASSIFICAÇÃO
 - "type": escolha o mais específico que couber.
 - "segments" e "series": SOMENTE o que o documento indicar explicitamente. Se ele vale para toda a escola, devolva listas vazias — lista vazia significa "todo mundo vê", e é melhor do que um palpite errado que esconderia o documento de quem precisa.
 - "summary": 1 a 2 frases dizendo a que o documento serve, em português, sem repetir o título.
-- "validFrom"/"validUntil": a janela em que a informação ainda vale. Um cronograma da 1ª etapa deixa de valer quando a etapa acaba. Se o documento não permitir concluir, devolva null nos dois.
+- "validUntil": até quando a informação ainda vale, ou seja, a partir de quando o documento vira histórico. Um cronograma da 1ª etapa deixa de valer quando a etapa acaba. Sem base para concluir, null.
+- "validFrom": quase sempre **null**. Não é a data do que o documento anuncia — é a data a partir da qual o documento passaria a valer, e um comunicado já publicado vale desde já. Um comunicado de outubro sobre a formatura de dezembro tem validFrom null, e NÃO "2026-12-11": preencher a data do evento aqui esconderia o comunicado justamente durante os meses em que as famílias precisam lê-lo. Só preencha se o próprio documento disser que ele só entra em vigor numa data futura (um regulamento novo que começa a valer no ano que vem, por exemplo).
 
 REGRAS DE EXTRAÇÃO DE DATAS (o ponto mais importante)
 - Extraia apenas datas de COISAS QUE VÃO ACONTECER: provas, recuperações, simulados, entregas, eventos, reuniões, prazos.

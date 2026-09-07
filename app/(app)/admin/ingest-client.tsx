@@ -8,6 +8,7 @@ import {
   FileIcon,
   SpinnerIcon,
   UploadIcon,
+  XIcon,
 } from '@/components/icons';
 import {
   DOCUMENT_TYPES,
@@ -28,6 +29,7 @@ interface RecentDocument {
   segments: Segment[];
   series: string[];
   anoLetivo: number | null;
+  validFrom: string | null;
   validUntil: string | null;
   audience: Role[];
   usedOcr: boolean;
@@ -85,6 +87,15 @@ export function IngestClient({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [jobs, setJobs] = useState<Job[]>([]);
+  /**
+   * Arquivos escolhidos que ainda NÃO foram enviados.
+   *
+   * Antes o envio disparava no instante em que o arquivo era escolhido, e a
+   * configuração logo abaixo só valeria para o próximo lote — quem lia a tela
+   * de cima para baixo (escolher, depois configurar) acabava subindo tudo com
+   * o padrão, sem perceber. Agora escolher só prepara; quem envia é o botão.
+   */
+  const [staged, setStaged] = useState<File[]>([]);
   const [audience, setAudience] = useState<Role[]>([]);
   const [validUntil, setValidUntil] = useState('');
   const [dragging, setDragging] = useState(false);
@@ -115,9 +126,27 @@ export function IngestClient({
       prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
     );
 
+  /** Acrescenta à fila de espera, sem repetir o mesmo arquivo. */
+  function stage(files: File[]) {
+    if (files.length === 0) return;
+    setStaged((prev) => {
+      const chave = (f: File) => `${f.name}:${f.size}`;
+      const vistos = new Set(prev.map(chave));
+      return [...prev, ...files.filter((f) => !vistos.has(chave(f)))];
+    });
+    // Zerar o input permite reescolher o MESMO arquivo depois de removê-lo
+    // daqui — sem isso o `change` não dispara e parece que o clique não fez nada.
+    if (inputRef.current) inputRef.current.value = '';
+  }
+
+  function unstage(index: number) {
+    setStaged((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function ingest(files: File[]) {
     if (files.length === 0 || busy) return;
     setBusy(true);
+    setStaged([]);
 
     const queued: Job[] = files.map((file) => ({
       id: crypto.randomUUID(),
@@ -171,7 +200,6 @@ export function IngestClient({
     }
 
     setBusy(false);
-    if (inputRef.current) inputRef.current.value = '';
     router.refresh();
   }
 
@@ -217,7 +245,7 @@ export function IngestClient({
           onDrop={(event) => {
             event.preventDefault();
             setDragging(false);
-            void ingest([...event.dataTransfer.files]);
+            stage([...event.dataTransfer.files]);
           }}
           className={`mt-8 rounded-xl border-2 border-dashed p-6 text-center sm:p-10 transition-colors ${
             dragging ? 'border-navy bg-navy-soft/40' : 'border-line-strong bg-panel'
@@ -230,6 +258,9 @@ export function IngestClient({
           <p className="mt-1 text-[0.8125rem] text-muted">
             PDF, DOCX, CSV, XLSX, TXT e imagens. Até 32 MB por arquivo.
           </p>
+          <p className="mt-1 text-[0.8125rem] text-muted">
+            Nada é enviado agora — primeiro você define abaixo quem pode ver.
+          </p>
 
           <input
             ref={inputRef}
@@ -238,15 +269,51 @@ export function IngestClient({
             accept=".pdf,.docx,.csv,.xlsx,.xlsm,.txt,.md,.png,.jpg,.jpeg,.webp"
             className="sr-only"
             id="file-input"
-            onChange={(event) => void ingest([...(event.target.files ?? [])])}
+            onChange={(event) => stage([...(event.target.files ?? [])])}
           />
           <label
             htmlFor="file-input"
-            className={`btn-primary mt-5 cursor-pointer ${busy ? 'pointer-events-none opacity-60' : ''}`}
+            className={`btn-ghost mt-5 cursor-pointer ${busy ? 'pointer-events-none opacity-60' : ''}`}
           >
-            {busy ? 'Ingerindo…' : 'Escolher arquivos'}
+            Escolher arquivos
           </label>
         </div>
+
+        {/* Fila de espera */}
+        {staged.length > 0 ? (
+          <div className="card mt-5 p-4 sm:p-5">
+            <p className="eyebrow-muted">
+              {staged.length === 1
+                ? '1 arquivo pronto para enviar'
+                : `${staged.length} arquivos prontos para enviar`}
+            </p>
+            <ul className="mt-3 space-y-1.5">
+              {staged.map((file, index) => (
+                <li
+                  key={`${file.name}:${file.size}`}
+                  className="flex items-center gap-2.5 rounded-lg bg-panel px-3 py-2"
+                >
+                  <FileIcon className="h-4 w-4 shrink-0 text-navy" />
+                  <span className="min-w-0 flex-1 truncate text-[0.875rem] text-ink">
+                    {file.name}
+                  </span>
+                  <span className="shrink-0 text-[0.75rem] text-muted">
+                    {formatBytes(file.size)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => unstage(index)}
+                    disabled={busy}
+                    aria-label={`Tirar ${file.name} da fila`}
+                    className="-mr-1 shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-chip-soft hover:text-ink disabled:opacity-50"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {/* Configuração do envio */}
         <div className="panel mt-5 p-4 sm:p-6">
@@ -446,6 +513,35 @@ export function IngestClient({
             </div>
           </div>
 
+          {/*
+            O envio fica no fim do bloco de configuração, e não junto da área de
+            arquivos, porque é aqui que a pessoa termina de decidir. Ler a tela
+            de cima para baixo passa a levar à ordem certa: escolher, configurar,
+            enviar.
+          */}
+          <div className="mt-7 flex flex-wrap items-center gap-4 border-t border-line pt-6">
+            <button
+              type="button"
+              disabled={busy || staged.length === 0}
+              onClick={() => void ingest(staged)}
+              className="btn-primary"
+            >
+              {busy
+                ? 'Enviando…'
+                : staged.length === 0
+                  ? 'Escolha os arquivos acima'
+                  : `Enviar ${staged.length} arquivo${staged.length === 1 ? '' : 's'} com estas configurações`}
+            </button>
+
+            {staged.length > 0 && !busy ? (
+              <p className="text-[0.8125rem] leading-snug text-muted">
+                {audience.length === 0
+                  ? 'Visível para toda a escola.'
+                  : `Visível só para: ${audience.map((r) => ROLE_LABELS[r]).join(', ')}.`}
+              </p>
+            ) : null}
+          </div>
+
           {storage === 'local' ? (
             <p className="mt-5 flex items-start gap-2 text-[0.75rem] leading-relaxed text-muted">
               <AlertIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -532,6 +628,18 @@ export function IngestClient({
                     </span>
                   ) : null}
                   {doc.usedOcr ? <span className="chip">OCR</span> : null}
+                  {/*
+                    Fora da janela de vigência o documento não aparece para
+                    ninguém — nem na lista, nem na busca da IA. Esta tela é o
+                    único lugar onde ele ainda é visível, então é aqui que o
+                    aviso precisa estar; sem ele, o documento simplesmente some
+                    e não há como descobrir por quê.
+                  */}
+                  {invisibilityReason(doc) ? (
+                    <span className="chip bg-danger-soft text-danger">
+                      {invisibilityReason(doc)}
+                    </span>
+                  ) : null}
                 </div>
 
                 <p className="mt-3 border-t border-line pt-2.5 text-[0.75rem] text-muted">
@@ -684,4 +792,20 @@ function formatBytes(bytes: number): string {
 function formatDate(iso: string): string {
   const [year, month, day] = iso.split('-');
   return `${day}/${month}/${year}`;
+}
+
+/**
+ * Por que este documento não aparece para ninguém, quando for o caso.
+ *
+ * Comparação em texto porque as datas vêm do banco como `YYYY-MM-DD`, formato
+ * em que a ordem lexicográfica é a ordem cronológica — e converter para `Date`
+ * aqui só traria o erro de fuso de volta.
+ */
+function invisibilityReason(doc: RecentDocument): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  if (doc.validUntil && doc.validUntil < today) return 'Vencido: ninguém vê';
+  if (doc.validFrom && doc.validFrom > today) {
+    return `Só aparece em ${formatDate(doc.validFrom)}`;
+  }
+  return null;
 }

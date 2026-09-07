@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { count, desc, eq, sql } from 'drizzle-orm';
 import { requireSession, isAdmin } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { documentChunks, documentEvents, documents, tenants } from '@/lib/db/schema';
+import { documentEvents, documents, tenants } from '@/lib/db/schema';
 import { PageHeader } from '@/components/page-header';
 import { DEMO_MODE } from '@/lib/ai/provider';
 import { storageDriver } from '@/lib/storage';
@@ -124,16 +124,29 @@ async function IngestTab({ tenantId }: { tenantId: string }) {
         series: documents.series,
         anoLetivo: documents.anoLetivo,
         etapa: documents.etapa,
+        validFrom: documents.validFrom,
         validUntil: documents.validUntil,
         audience: documents.audience,
         usedOcr: documents.usedOcr,
         createdAt: documents.createdAt,
-        chunkCount: sql<number>`(SELECT count(*) FROM ${documentChunks} WHERE ${documentChunks.documentId} = ${documents.id})`.mapWith(
-          Number,
-        ),
-        eventCount: sql<number>`(SELECT count(*) FROM ${documentEvents} WHERE ${documentEvents.documentId} = ${documents.id})`.mapWith(
-          Number,
-        ),
+        /*
+         * Identificadores escritos à mão, com alias, e não interpolados.
+         *
+         * Interpolar a coluna do Drizzle aqui gerava `WHERE "document_id" =
+         * "id"` — sem qualificação. Dentro da subconsulta, os dois nomes
+         * resolvem para colunas de `document_chunks` (que também tem `id`), e a
+         * condição virava `document_chunks.document_id = document_chunks.id`:
+         * sempre falsa. A tela mostrava "0 trechos · 0 eventos" para todo
+         * documento, que é justamente o número usado para decidir se a ingestão
+         * funcionou. Erro silencioso, e o pior tipo: fazia a ingestão parecer
+         * quebrada quando estava correta.
+         */
+        chunkCount: sql<number>`(
+          SELECT count(*) FROM document_chunks c WHERE c.document_id = documents.id
+        )`.mapWith(Number),
+        eventCount: sql<number>`(
+          SELECT count(*) FROM document_events e WHERE e.document_id = documents.id
+        )`.mapWith(Number),
       })
       .from(documents)
       .where(eq(documents.tenantId, tenantId))

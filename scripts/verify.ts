@@ -6,6 +6,7 @@ import type { SessionUser } from '@/lib/auth/session';
 import { documentVisibilityFilter } from '@/lib/rag/access';
 import { retrieve } from '@/lib/rag/retrieve';
 import { upcomingEvents } from '@/lib/rag/events';
+import { safeValidFrom } from '@/lib/ingest/pipeline';
 
 /**
  * Verificação de fumaça do que não pode quebrar: o recorte de acesso por
@@ -72,6 +73,58 @@ async function main() {
   const vencido = 'Calendário de Provas — 1ª Etapa/2025 (encerrado)';
   check('documento vencido fica fora para o aluno', !doAluno7.includes(vencido));
   check('documento vencido fica fora até para o admin', !doAdmin.includes(vencido));
+
+  /*
+   * O `valid_from` no futuro esconde o documento de todo mundo. É um recurso
+   * legítimo, e foi um acidente caro: o classificador lia "Formatura em
+   * 11/12/2026" e devolvia essa data como início de vigência, o que sumia com o
+   * comunicado durante os meses em que ele mais importa. O pipeline agora
+   * descarta data futura vinda do modelo — aqui confirmamos que a coluna,
+   * quando de fato preenchida, continua escondendo, e que o acervo semeado não
+   * tem nenhum documento invisível por esse motivo.
+   */
+  const [futuro] = await db.execute<{ total: number }>(sql`
+    SELECT count(*)::int AS total FROM documents WHERE valid_from > CURRENT_DATE
+  `);
+  check(
+    'nenhum documento do acervo está invisível por vigência futura',
+    futuro.total === 0,
+    `${futuro.total} documento(s) com valid_from no futuro`,
+  );
+
+  check(
+    'data de início no futuro vinda da IA é descartada',
+    safeValidFrom('2026-12-11', '2026-09-07') === null,
+  );
+  check(
+    'data de início no passado é preservada',
+    safeValidFrom('2026-08-01', '2026-09-07') === '2026-08-01',
+  );
+  check('hoje conta como já vigente', safeValidFrom('2026-09-07', '2026-09-07') === '2026-09-07');
+
+  /*
+   * A contagem de trechos e eventos por documento é o número que o
+   * administrador usa para decidir se a ingestão funcionou. Ela já esteve
+   * errada — zerada para todos — por subconsulta com coluna não qualificada, e
+   * o efeito foi pior que o bug: fazia a ingestão parecer quebrada quando
+   * estava certa.
+   */
+  const contagens = await db.execute<{ title: string; trechos: number; eventos: number }>(sql`
+    SELECT d.title,
+           (SELECT count(*) FROM document_chunks c WHERE c.document_id = d.id)::int AS trechos,
+           (SELECT count(*) FROM document_events e WHERE e.document_id = d.id)::int AS eventos
+    FROM documents d
+  `);
+  const listadas = [...contagens];
+  check(
+    'todo documento do acervo tem pelo menos um trecho indexado',
+    listadas.length > 0 && listadas.every((d) => d.trechos > 0),
+    `${listadas.filter((d) => d.trechos === 0).length} documento(s) sem trecho`,
+  );
+  check(
+    'a contagem de eventos por documento não vem zerada para todos',
+    listadas.some((d) => d.eventos > 0),
+  );
 
   // Classificado como 7º ano, mas SEM restrição explícita: continua visível
   // para toda a escola. Classificar não é esconder.
