@@ -130,7 +130,12 @@ build falha.
 Na mesma tela de importação, abra **Environment Variables** e adicione uma por
 uma. Marque as três caixas (Production, Preview, Development) em todas.
 
-**Obrigatórias:**
+> Só o que está listado abaixo é necessário. O arquivo `.env.example` do
+> repositório traz outras variáveis, mas **todas têm padrão no código** — não
+> precisa defini-las, e algumas (como `SEED_PASSWORD` e `ENABLE_DEMO_LOGIN`)
+> só valem para desenvolvimento local.
+
+**Obrigatórias — a aplicação não sobe sem elas:**
 
 | Nome | O que colar |
 |---|---|
@@ -141,6 +146,9 @@ uma. Marque as três caixas (Production, Preview, Development) em todas.
 | `SUPABASE_URL` | o Project URL do passo 1.5 |
 | `SUPABASE_SERVICE_ROLE_KEY` | a chave service_role do passo 1.5 |
 | `SUPABASE_STORAGE_BUCKET` | `documentos` |
+
+> As três do Supabase são obrigatórias **na Vercel**: o disco de lá é somente
+> leitura, e sem elas a ingestão falha na hora de guardar o PDF.
 
 **Só para a instalação** (você remove depois, na Parte 4):
 
