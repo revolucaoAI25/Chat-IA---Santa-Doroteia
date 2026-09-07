@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
  * PDF para quem não pode vê-lo.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getSession();
@@ -56,12 +56,21 @@ export async function GET(
     );
   }
 
+  /*
+   * `inline` por padrão, para o painel de fontes conseguir pré-visualizar o PDF
+   * num iframe. Com `?download=1` o navegador salva em vez de abrir — é o botão
+   * "Baixar" do painel.
+   */
+  const download = new URL(request.url).searchParams.get('download') === '1';
+  const extension = document.mime_type === 'application/pdf' ? '.pdf' : '';
+  const fileName = `${document.title}${extension}`;
+
   try {
     const file = await getObject(document.storage_path);
     return new Response(new Uint8Array(file), {
       headers: {
         'Content-Type': document.mime_type || 'application/octet-stream',
-        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(document.title)}`,
+        'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(fileName)}`,
         'Cache-Control': 'private, max-age=300',
       },
     });

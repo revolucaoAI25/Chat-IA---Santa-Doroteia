@@ -2,7 +2,8 @@ import { Fragment, type ReactNode } from 'react';
 
 /**
  * Renderizador do subconjunto de markdown que o assistente realmente produz:
- * parágrafos, listas, negrito e as marcas de citação [1].
+ * parágrafos, listas, negrito, itálico, títulos de seção e as marcas de
+ * citação [1].
  *
  * Escrito à mão em vez de trazer uma biblioteca de markdown por dois motivos:
  * o conjunto é pequeno e fechado, e a saída são elementos React — nunca
@@ -43,6 +44,13 @@ export function AnswerText({
               </li>
             ))}
           </ol>
+        ) : block.type === 'heading' ? (
+          <p
+            key={i}
+            className="pt-1 text-[0.6875rem] font-bold uppercase tracking-[0.09em] text-muted"
+          >
+            {block.text}
+          </p>
         ) : (
           <p key={i}>{renderInline(block.text, onCitationClick)}</p>
         ),
@@ -53,8 +61,19 @@ export function AnswerText({
 
 type Block =
   | { type: 'paragraph'; text: string }
+  | { type: 'heading'; text: string }
   | { type: 'list'; items: string[] }
   | { type: 'ordered'; items: string[] };
+
+/**
+ * Linha inteiramente em negrito = título de seção.
+ *
+ * É a forma que o modelo usa naturalmente para separar assuntos ("**Provas
+ * finais**", "**Recuperação**"), e renderizá-la como parágrafo em negrito
+ * empilhava dois pesos iguais e apagava a hierarquia. Cabeçalho markdown (#)
+ * continua proibido no prompt: em texto curto ele fica desproporcional.
+ */
+const HEADING_LINE = /^\*\*(.+?)\*\*:?$/;
 
 function parseBlocks(content: string): Block[] {
   const blocks: Block[] = [];
@@ -85,6 +104,13 @@ function parseBlocks(content: string): Block[] {
       continue;
     }
 
+    const boldLine = line.trim().match(HEADING_LINE);
+    if (boldLine) {
+      flush();
+      blocks.push({ type: 'heading', text: boldLine[1] });
+      continue;
+    }
+
     const bullet = line.match(/^\s*[-*•]\s+(.*)$/);
     const numbered = line.match(/^\s*\d+[.)]\s+(.*)$/);
     // O prompt pede para não usar cabeçalho, mas se vier um, vira parágrafo.
@@ -109,10 +135,12 @@ function parseBlocks(content: string): Block[] {
   return blocks;
 }
 
-/** Negrito e marcas de citação, preservando a ordem do texto. */
+/** Negrito, itálico e marcas de citação, preservando a ordem do texto. */
 function renderInline(text: string, onCitationClick?: (index: number) => void): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const pattern = /\*\*(.+?)\*\*|\[(\d{1,2})\]/g;
+  // O negrito vem antes na alternância de propósito: senão `**x**` casaria como
+  // itálico de `*x*` e sobraria um asterisco solto em cada ponta.
+  const pattern = /\*\*(.+?)\*\*|\*(?!\s)([^*\n]+?)(?<!\s)\*|_(?!\s)([^_\n]+?)(?<!\s)_|\[(\d{1,2})\]/g;
   let cursor = 0;
   let key = 0;
   let match: RegExpExecArray | null;
@@ -126,8 +154,10 @@ function renderInline(text: string, onCitationClick?: (index: number) => void): 
           {match[1]}
         </strong>,
       );
+    } else if (match[2] !== undefined || match[3] !== undefined) {
+      nodes.push(<em key={key++}>{match[2] ?? match[3]}</em>);
     } else {
-      const index = Number(match[2]);
+      const index = Number(match[4]);
       nodes.push(
         <Fragment key={key++}>
           <button

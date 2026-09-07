@@ -158,6 +158,23 @@ export function PlusIcon({ className }: Props) {
   );
 }
 
+export function XIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base} strokeWidth={2}>
+      <path d="M5 5l10 10M15 5 5 15" />
+    </svg>
+  );
+}
+
+export function DownloadIcon({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>
+      <path d="M10 2.8v9.8M6.4 9l3.6 3.6L13.6 9" />
+      <path d="M3.4 13.6V16a1.6 1.6 0 0 0 1.6 1.6h10a1.6 1.6 0 0 0 1.6-1.6v-2.4" />
+    </svg>
+  );
+}
+
 export function FileIcon({ className }: Props) {
   return (
     <svg viewBox="0 0 20 20" className={className} aria-hidden="true" {...base}>

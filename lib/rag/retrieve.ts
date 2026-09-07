@@ -13,9 +13,12 @@ export interface RetrievedChunk {
   docNumber: number | null;
   page: number | null;
   anoLetivo: number | null;
+  etapa: string | null;
   validUntil: string | null;
   series: string[];
   segments: string[];
+  /** Necessário para o painel de fontes decidir se dá para pré-visualizar. */
+  mimeType: string | null;
   content: string;
   score: number;
 }
@@ -90,9 +93,11 @@ interface RawRow extends Record<string, unknown> {
   doc_number: number | null;
   page: number | null;
   ano_letivo: number | null;
+  etapa: string | null;
   valid_until: string | null;
   series: string[];
   segments: string[];
+  mime_type: string | null;
   content: string;
 }
 
@@ -116,9 +121,11 @@ const SELECTION = sql`
   d.type::text    AS type,
   d.doc_number    AS doc_number,
   d.ano_letivo    AS ano_letivo,
+  d.etapa         AS etapa,
   d.valid_until   AS valid_until,
   d.series        AS series,
-  d.segments      AS segments
+  d.segments      AS segments,
+  d.mime_type     AS mime_type
 `;
 
 /**
@@ -255,9 +262,11 @@ function toChunk(row: RawRow, score: number): RetrievedChunk {
     docNumber: row.doc_number,
     page: row.page,
     anoLetivo: row.ano_letivo,
+    etapa: row.etapa,
     validUntil: row.valid_until,
     series: row.series ?? [],
     segments: row.segments ?? [],
+    mimeType: row.mime_type,
     content: row.content,
     score,
   };

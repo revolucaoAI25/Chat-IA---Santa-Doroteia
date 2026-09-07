@@ -15,6 +15,7 @@ OCR, extração automática de datas e controle de acesso por perfil de verdade.
 |---|---|
 | Login por matrícula, com perfis aluno/professor/coordenação/admin | ✅ |
 | Chat com resposta em streaming e citação dos documentos | ✅ |
+| Painel lateral da fonte: trecho usado, metadados, prévia e download do PDF | ✅ |
 | IA contextualizada por quem pergunta (papel + série, ou disciplinas) | ✅ |
 | Ingestão de PDF, DOCX, CSV, XLSX, TXT e imagens | ✅ |
 | OCR para digitalizações e imagens (via modelo multimodal) | ✅ |
@@ -478,4 +479,5 @@ mexer:
 | `npm run setup` | `db:migrate` + `db:seed` |
 | `npm run busca` | Sonda de recuperação: o que cada perfil recupera, e em que posição |
 | `npx tsx scripts/verify.ts` | Confere acesso por perfil, vigência, busca e agenda |
+| `npx tsx scripts/verify-render.tsx` | Confere o renderizador de markdown do chat |
 | `npm run typecheck` | `tsc --noEmit` |

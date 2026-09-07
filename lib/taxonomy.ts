@@ -67,6 +67,35 @@ export function segmentLabel(value: Segment | null | undefined): string {
   return value ? SEGMENT_LABELS[value] : '—';
 }
 
+/**
+ * Abrangência de um documento numa linha só.
+ *
+ * `serieLabel` já carrega o segmento ("7º ano · Fundamental II"), o que fica
+ * ótimo numa etiqueta isolada e péssimo numa lista: quatro séries do mesmo
+ * segmento repetiam "Fundamental II" quatro vezes. Aqui as séries vêm sem o
+ * sufixo e o segmento aparece uma vez, no fim.
+ */
+export function scopeLabel(
+  series: string[] | undefined,
+  segments: Segment[] | string[] | undefined,
+): string {
+  if (series && series.length > 0) {
+    const nomes = series.map((s) => (SERIES_BY_VALUE.get(s)?.label ?? s).split(' · ')[0]);
+    const segmentos = [
+      ...new Set(series.map((s) => SERIES_BY_VALUE.get(s)?.segment).filter(Boolean)),
+    ] as Segment[];
+
+    const sufixo = segmentos.map((s) => SEGMENT_LABELS[s]).join(' e ');
+    return sufixo ? `${nomes.join(', ')} · ${sufixo}` : nomes.join(', ');
+  }
+
+  if (segments && segments.length > 0) {
+    return segments.map((s) => SEGMENT_LABELS[s as Segment] ?? s).join(', ');
+  }
+
+  return 'Toda a escola';
+}
+
 export function documentTypeLabel(value: DocumentTypeValue): string {
   return DOCUMENT_TYPE_LABELS[value] ?? 'Outro';
 }

@@ -11,18 +11,12 @@ import {
   ThumbDownIcon,
   ThumbUpIcon,
 } from '@/components/icons';
+import { SourcePanel, type SourceDocument } from '@/components/source-panel';
 import { DOCUMENT_TYPE_LABELS, ROLE_LABELS, serieLabel } from '@/lib/taxonomy';
 import type { SessionUser } from '@/lib/auth/session';
 import type { DocumentTypeValue } from '@/lib/db/schema';
 
-interface Citation {
-  documentId: string;
-  title: string;
-  type: string;
-  docNumber: number | null;
-  page: number | null;
-  excerpt: string;
-}
+type Citation = SourceDocument;
 
 /** Chave da thread na aba. */
 const CONVERSATION_KEY = 'sd_conversation';
@@ -141,9 +135,11 @@ export function ChatClient({
     };
   }, []);
 
+  /** Fonte aberta no painel lateral, com o número da citação. */
+  const [source, setSource] = useState<{ citation: Citation; index: number } | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const citationRefs = useRef(new Map<string, HTMLAnchorElement | null>());
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -282,10 +278,17 @@ export function ChatClient({
     }
   };
 
-  const focusCitation = (messageId: string, index: number) => {
-    const element = citationRefs.current.get(`${messageId}:${index}`);
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    element?.focus({ preventScroll: true });
+  /**
+   * A marca [1] no texto abre a fonte no painel.
+   *
+   * Antes ela só rolava a tela até o cartão lá embaixo, o que obrigava a pessoa
+   * a sair da conversa para conferir. O modelo às vezes cita um número que não
+   * existe, então a chamada é tolerante: sem a fonte correspondente, nada
+   * acontece.
+   */
+  const openSource = (citations: Citation[], index: number) => {
+    const citation = citations[index - 1];
+    if (citation) setSource({ citation, index });
   };
 
   // Enquanto restaura, não mostramos nem as sugestões nem a conversa: exibir
@@ -390,7 +393,7 @@ export function ChatClient({
                     {item.content ? (
                       <AnswerText
                         content={item.content}
-                        onCitationClick={(index) => focusCitation(item.id, index)}
+                        onCitationClick={(index) => openSource(item.citations, index)}
                       />
                     ) : null}
 
@@ -432,14 +435,16 @@ export function ChatClient({
                         <ul className="space-y-2">
                           {item.citations.map((citation, index) => (
                             <li key={citation.documentId}>
-                              <a
-                                ref={(node) => {
-                                  citationRefs.current.set(`${item.id}:${index + 1}`, node);
-                                }}
-                                href={`/api/documents/${citation.documentId}/file`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="card group flex gap-3 p-3.5 transition-colors hover:border-navy/40 hover:bg-chip-soft"
+                              {/*
+                                Botão, e não link direto para o PDF: abrir o
+                                arquivo era um salto grande demais para quem só
+                                quer conferir uma frase. O painel mostra o
+                                trecho primeiro, e de lá sai o PDF.
+                              */}
+                              <button
+                                type="button"
+                                onClick={() => setSource({ citation, index: index + 1 })}
+                                className="card group flex w-full gap-3 p-3.5 text-left transition-colors hover:border-navy/40 hover:bg-chip-soft"
                               >
                                 <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-chip text-[0.6875rem] font-bold text-navy">
                                   {index + 1}
@@ -459,7 +464,7 @@ export function ChatClient({
                                   </span>
                                 </span>
                                 <FileIcon className="h-4 w-4 shrink-0 text-navy opacity-40 transition-opacity group-hover:opacity-100" />
-                              </a>
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -568,6 +573,14 @@ export function ChatClient({
           </p>
         </div>
       </div>
+
+      {/* Fora do fluxo (position: fixed), mas na raiz do componente para não
+          herdar contexto de empilhamento de um pai com transform. */}
+      <SourcePanel
+        source={source?.citation ?? null}
+        index={source?.index ?? null}
+        onClose={() => setSource(null)}
+      />
     </div>
   );
 }

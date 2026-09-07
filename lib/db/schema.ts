@@ -374,7 +374,16 @@ export const messages = pgTable(
       .references(() => conversations.id, { onDelete: 'cascade' }),
     role: text('role').$type<'user' | 'assistant'>().notNull(),
     content: text('content').notNull(),
-    /** Documentos citados na resposta, já resolvidos para exibição. */
+    /**
+     * Documentos citados na resposta, já resolvidos para exibição.
+     *
+     * Gravados junto com a mensagem, e não recalculados na leitura: o acervo
+     * muda (documento vence, é substituído, muda de recorte) e a citação tem de
+     * continuar dizendo o que foi de fato usado naquela resposta.
+     *
+     * Os campos além dos seis primeiros são opcionais porque mensagens antigas
+     * não os têm.
+     */
     citations: jsonb('citations')
       .$type<
         Array<{
@@ -384,6 +393,13 @@ export const messages = pgTable(
           docNumber: number | null;
           page: number | null;
           excerpt: string;
+          anoLetivo?: number | null;
+          etapa?: string | null;
+          series?: string[];
+          segments?: string[];
+          validUntil?: string | null;
+          mimeType?: string | null;
+          excerpts?: Array<{ page: number | null; text: string }>;
         }>
       >()
       .notNull()

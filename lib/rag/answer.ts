@@ -6,6 +6,13 @@ import type { DocumentTypeValue, Segment, TenantSettings } from '@/lib/db/schema
 import { formatEventsForPrompt, type UpcomingEvent } from './events';
 import type { RetrievedChunk } from './retrieve';
 
+/**
+ * O que a interface precisa para mostrar a fonte sem uma consulta a mais.
+ *
+ * Os campos além dos quatro primeiros são opcionais porque as mensagens
+ * gravadas antes desta versão não os têm — a tela precisa continuar
+ * renderizando uma conversa antiga sem quebrar.
+ */
 export interface Citation {
   documentId: string;
   title: string;
@@ -13,6 +20,14 @@ export interface Citation {
   docNumber: number | null;
   page: number | null;
   excerpt: string;
+  anoLetivo?: number | null;
+  etapa?: string | null;
+  series?: string[];
+  segments?: string[];
+  validUntil?: string | null;
+  mimeType?: string | null;
+  /** Todos os trechos deste documento que foram ao prompt, na ordem do texto. */
+  excerpts?: Array<{ page: number | null; text: string }>;
 }
 
 /**
@@ -113,7 +128,14 @@ COMO RESPONDER
 - Nunca resuma uma lista com "entre outros", "etc." ou "entre as matérias". Se a pergunta pede a lista, dê a lista inteira.
 - Datas sempre por extenso e com o dia da semana quando der: "quinta-feira, 12 de junho de 2026". Horários, valores e prazos exatamente como estão no documento.
 - Lista só a partir de três itens, ou quando cada linha tem data e assunto. Dois fatos cabem numa frase.
-- Não use cabeçalho em markdown (#) nem tabela. Negrito só no que a pessoa precisa reter: data, matéria, prazo. Nada de emoji.
+
+FORMATAÇÃO
+A tela renderiza markdown, então use — com parcimônia:
+- **Negrito** no que a pessoa precisa reter: a data, a matéria, o prazo, o valor. Uma ou duas marcas por parágrafo; texto todo em negrito não destaca nada.
+- *Itálico* para uma ressalva curta ou o nome de um evento. Raro.
+- Listas com \`-\` para itens sem ordem, e \`1.\` quando a ordem ou a sequência importa (um procedimento, por exemplo).
+- Quando a resposta cobre assuntos distintos, abra cada bloco com uma linha só de título em negrito ("**Provas finais**"). Só a partir de dois blocos; numa resposta de um parágrafo, título é ruído.
+NÃO use: cabeçalho markdown (#), tabela, emoji, linha horizontal (---), bloco de código, link markdown. As fontes já aparecem sozinhas embaixo da resposta — não escreva uma seção de "Fontes" nem repita títulos de documento no fim.
 - Se os documentos se contradisserem, mostre as duas versões e aponte qual é o mais recente.
 - Ao falar de algo que já passou, diga isso explicitamente.
 
@@ -158,20 +180,45 @@ function buildContext(chunks: RetrievedChunk[]): string {
     .join('\n\n---\n\n');
 }
 
+/** Quantos trechos do mesmo documento o painel lateral mostra. */
+const MAX_EXCERPTS = 4;
+
 export function toCitations(chunks: RetrievedChunk[]): Citation[] {
-  // Um documento pode contribuir com vários trechos; a citação é por documento.
+  // Um documento pode contribuir com vários trechos; a citação é por documento,
+  // mas guarda todos eles — é o que o painel lateral exibe para a pessoa
+  // conferir a resposta sem precisar abrir o PDF.
   const byDocument = new Map<string, Citation>();
+
   for (const chunk of chunks) {
-    if (byDocument.has(chunk.documentId)) continue;
+    const excerpt = {
+      page: chunk.page,
+      text: chunk.content.replace(/[ \t]+/g, ' ').trim(),
+    };
+
+    const existing = byDocument.get(chunk.documentId);
+    if (existing) {
+      if (existing.excerpts!.length < MAX_EXCERPTS) existing.excerpts!.push(excerpt);
+      continue;
+    }
+
     byDocument.set(chunk.documentId, {
       documentId: chunk.documentId,
       title: chunk.title,
       type: chunk.type,
       docNumber: chunk.docNumber,
       page: chunk.page,
-      excerpt: chunk.content.replace(/\s+/g, ' ').slice(0, 260).trim(),
+      // Resumo curto, para o cartão fechado. O texto inteiro fica em `excerpts`.
+      excerpt: excerpt.text.replace(/\s+/g, ' ').slice(0, 260).trim(),
+      anoLetivo: chunk.anoLetivo,
+      etapa: chunk.etapa,
+      series: chunk.series,
+      segments: chunk.segments,
+      validUntil: chunk.validUntil,
+      mimeType: chunk.mimeType,
+      excerpts: [excerpt],
     });
   }
+
   return [...byDocument.values()];
 }
 
