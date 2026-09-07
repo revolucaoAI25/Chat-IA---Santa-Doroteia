@@ -154,7 +154,7 @@ uma. Marque as três caixas (Production, Preview, Development) em todas.
 
 | Nome | O que colar |
 |---|---|
-| `SETUP_TOKEN` | uma senha longa que você inventa, com 16+ caracteres. Ex.: `instalacao-santa-doroteia-2026` |
+| `SETUP_TOKEN` | uma senha longa que você inventa, com 16+ caracteres. **Use só letras, números e hífen** — este valor viaja na URL, e símbolos como `@`, `#`, `&` e `%` podem chegar embaralhados. Ex.: `instalacao-santa-doroteia-2026` |
 | `SETUP_ADMIN_EMAIL` | seu e-mail |
 | `SETUP_ADMIN_PASSWORD` | a senha que você vai usar para entrar (8+ caracteres) |
 | `SETUP_ADMIN_NAME` | seu nome |
@@ -162,10 +162,30 @@ uma. Marque as três caixas (Production, Preview, Development) em todas.
 
 ### 2.3 Publicar
 
-Clique em **Deploy**. O primeiro build leva uns 2 minutos. No fim, a Vercel
-mostra um endereço `https://alguma-coisa.vercel.app`.
+Clique em **Deploy**. O primeiro build leva uns 2 minutos.
 
-Guarde esse endereço — é o `SEU-ENDERECO` das instruções a seguir.
+### 2.3.1 Pegar o endereço certo — o de produção
+
+No fim do build a Vercel mostra um endereço, mas **não é esse que você deve
+usar**. Aquele é o endereço daquele deploy específico: tem um código no meio,
+tipo `chat-ia-santa-doroteia-km8ry6g7j-suaconta.vercel.app`, e a Vercel o
+**protege com senha** — quem abre cai numa tela de login *da Vercel*, não da
+aplicação.
+
+O endereço de produção é outro, mais curto e sem o código. Para achá-lo:
+
+1. Vercel → seu projeto → aba **Domains** (ou o bloco **Domains** no painel do
+   projeto).
+2. Copie o primeiro da lista — algo como
+   `https://chat-ia-santa-doroteia.vercel.app`.
+
+**Esse** é o `SEU-ENDERECO` das instruções a seguir, e é o que você vai passar
+para o colégio.
+
+> Se mesmo o endereço de produção pedir login da Vercel, é porque a proteção
+> está ligada para tudo. Desligue em **Settings → Deployment Protection** →
+> **Vercel Authentication** → *Disabled* → **Save**. Sem isso ninguém de fora
+> da sua conta Vercel consegue abrir o sistema.
 
 ### 2.4 Escolher o plano
 
@@ -231,7 +251,8 @@ duplicado nem tem a senha sobrescrita.
 
 | Resposta | O que fazer |
 |---|---|
-| `404 Não encontrado` | O `SETUP_TOKEN` não bate, ou a variável não foi salva. Confira na Vercel e **refaça o deploy** — variáveis novas só valem no próximo build. |
+| Veio uma **página HTML** com `<title>Login – Vercel</title>` | A requisição nem chegou na aplicação: é a **Deployment Protection** da Vercel. Você usou o endereço com código no meio (`...-km8ry6g7j-...`). Use o endereço de produção da aba **Domains** (passo 2.3.1). Se persistir, desligue **Settings → Deployment Protection → Vercel Authentication**. |
+| `404 Não encontrado` | O `SETUP_TOKEN` não bate, ou a variável não foi salva. Confira na Vercel e **refaça o deploy** — variáveis novas só valem no próximo build. Tokens com `@`, `#`, `&` ou `%` podem se embaralhar na URL: prefira só letras e números. |
 | `DATABASE_URL não está definida` ao abrir o site | A variável não chegou ao ambiente de Production. Confira na Vercel e refaça o deploy. |
 | `Não é possível localizar um parâmetro ... 'X'` | Você usou `curl -X` no PowerShell, onde `curl` é apelido de `Invoke-WebRequest`. Use o `Invoke-RestMethod` acima, ou `curl.exe`. |
 | `As migrações precisam de uma conexão em modo sessão` | Faltou a `DATABASE_URL_DIRECT`, ou ela ficou com a porta 6543. Use o **Session pooler**. |
