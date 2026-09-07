@@ -22,6 +22,7 @@ export interface Citation {
   excerpt: string;
   anoLetivo?: number | null;
   etapa?: string | null;
+  documentDate?: string | null;
   series?: string[];
   segments?: string[];
   validUntil?: string | null;
@@ -168,6 +169,10 @@ function buildContext(chunks: RetrievedChunk[]): string {
         documentTypeLabel(chunk.type as DocumentTypeValue),
         chunk.docNumber ? `nº ${chunk.docNumber}` : null,
         chunk.title,
+        // A data de emissão fica no rótulo para o modelo saber qual documento
+        // prevalece quando dois se contradizem — a regra existe no prompt, e
+        // sem esta linha ela não teria como ser cumprida.
+        chunk.documentDate ? `emitido em ${chunk.documentDate}` : null,
         chunk.anoLetivo ? `ano letivo ${chunk.anoLetivo}` : null,
         `refere-se a: ${abrangencia}`,
         chunk.page ? `página ${chunk.page}` : null,
@@ -211,6 +216,7 @@ export function toCitations(chunks: RetrievedChunk[]): Citation[] {
       excerpt: excerpt.text.replace(/\s+/g, ' ').slice(0, 260).trim(),
       anoLetivo: chunk.anoLetivo,
       etapa: chunk.etapa,
+      documentDate: chunk.documentDate,
       series: chunk.series,
       segments: chunk.segments,
       validUntil: chunk.validUntil,

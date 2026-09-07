@@ -129,6 +129,7 @@ async function main() {
         restrictToScope: seed.restrictToScope ?? false,
         etapa: seed.etapa,
         anoLetivo: seed.anoLetivo,
+        documentDate: seed.documentDate,
         validFrom: seed.validFrom,
         validUntil: seed.validUntil,
         audience: seed.audience,

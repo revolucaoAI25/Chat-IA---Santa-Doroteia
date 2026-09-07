@@ -25,8 +25,10 @@ const DATE_FORMAT = new Intl.DateTimeFormat('pt-BR', {
   year: 'numeric',
 });
 
+/** Aceita tanto `YYYY-MM-DD` (data pura) quanto ISO com hora. */
 function formatDate(iso: string): string {
-  return DATE_FORMAT.format(new Date(iso)).replace('.', '');
+  const value = iso.length === 10 ? `${iso}T00:00:00` : iso;
+  return DATE_FORMAT.format(new Date(value)).replace('.', '');
 }
 
 /** Dias até o vencimento, ou null quando o documento não vence. */
@@ -219,9 +221,12 @@ function DocumentCard({ doc }: { doc: LibraryDocument }) {
           ) : null}
 
           <span className="text-[0.75rem] text-muted">
-            {/* "Adicionado" e não "publicado": esta é a data de entrada no
-                sistema, que pode ser bem depois da data do documento. */}
-            Adicionado em {formatDate(doc.createdAt)}
+            {/* A data do cabeçalho identifica o comunicado; a de upload só diz
+                quando a secretaria subiu o arquivo, e num acervo importado de
+                uma vez é a mesma para tudo. */}
+            {doc.documentDate
+              ? `Documento de ${formatDate(doc.documentDate)}`
+              : `Adicionado em ${formatDate(doc.createdAt)}`}
             {doc.pageCount ? ` · ${doc.pageCount} pág.` : ''}
           </span>
         </span>

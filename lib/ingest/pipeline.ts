@@ -37,6 +37,8 @@ export interface ClassificationOverrides {
   series?: string[];
   /** "Exibir somente para essas séries/segmentos". Só a administração define. */
   restrictToScope?: boolean;
+  /** Publicação agendada: o documento só aparece a partir desta data. */
+  validFrom?: string | null;
   validUntil?: string | null;
 }
 
@@ -140,15 +142,23 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
       referenceDate: new Date().toISOString().slice(0, 10),
     });
 
-    // A escolha do administrador vence a dedução da IA, campo a campo — e sem
-    // piso nenhum: se a secretaria diz que vence semana que vem, vence.
+    // A escolha do administrador vence a dedução da IA, campo a campo.
     const overrides = options.overrides ?? {};
     const validUntil =
       overrides.validUntil !== undefined && overrides.validUntil !== null
         ? overrides.validUntil
-        : safeValidUntil(analysis.validUntil, defaultValidUntil());
+        : (analysis.validUntil ?? defaultValidUntil());
 
-    const finalValidFrom = safeValidFrom(analysis.validFrom);
+    /*
+     * Publicação agendada é decisão humana, e só isso.
+     *
+     * A IA não propõe mais início de vigência — nem é perguntada. Enquanto era,
+     * ela devolvia a data do evento que o documento anuncia, e o comunicado
+     * sumia de todo mundo até lá. O padrão passa a ser o que a secretaria
+     * espera: subiu, está no ar. Quem quiser adiar preenche o campo no
+     * formulário.
+     */
+    const finalValidFrom = overrides.validFrom ?? null;
 
     const finalType = overrides.type ?? analysis.type;
     const finalSegments = overrides.segments ?? analysis.segments;
@@ -176,6 +186,7 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
         restrictToScope: finalRestrict,
         etapa: finalEtapa,
         anoLetivo: finalAnoLetivo,
+        documentDate: analysis.documentDate,
         validFrom: finalValidFrom,
         validUntil,
         audience: options.audience,
@@ -206,6 +217,7 @@ export async function ingestDocument(options: IngestOptions): Promise<IngestResu
       type: documentTypeLabel(document.type),
       docNumber: document.docNumber,
       anoLetivo: document.anoLetivo,
+      documentDate: document.documentDate,
       series: document.series,
     });
 
@@ -300,65 +312,7 @@ function defaultValidUntil(): string {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * Prazo mínimo de prateleira, em dias, para a vigência deduzida pela IA.
- *
- * Ninguém sobe um documento que expira em três semanas. Quando o modelo propõe
- * algo assim, ele não está estimando a validade da informação — está
- * devolvendo a data do último evento que leu no texto.
- */
-const MIN_SHELF_DAYS = 90;
 
-/**
- * Vigência proposta pela IA, com piso.
- *
- * A dedução automática é útil: um cronograma da 1ª etapa realmente deixa de
- * responder "quando é minha prova" na 3ª, e mantê-lo como fonte seria pior que
- * apagá-lo. Mas o modelo confunde "até quando a informação vale" com "quando
- * acontece o que está escrito aqui", e aí um comunicado de dezembro nasceria
- * vencido em janeiro — sumindo com o registro de tudo que aconteceu.
- *
- * O piso separa os dois casos sem exigir que o modelo acerte: proposta curta
- * demais é descartada em favor do padrão de retenção. Vencer é uma decisão que
- * o tempo toma; nascer quase vencido é sempre erro de leitura.
- */
-export function safeValidUntil(
-  proposed: string | null,
-  fallback: string,
-  today = new Date().toISOString().slice(0, 10),
-): string {
-  if (!proposed) return fallback;
-
-  const limite = new Date(`${today}T00:00:00Z`);
-  limite.setUTCDate(limite.getUTCDate() + MIN_SHELF_DAYS);
-
-  return proposed >= limite.toISOString().slice(0, 10) ? proposed : fallback;
-}
-
-/**
- * Descarta um início de vigência no futuro vindo da classificação automática.
- *
- * O filtro de visibilidade esconde documento cuja vigência ainda não começou —
- * o que é correto como recurso e desastroso como acidente. E era acidente:
- * pedindo "a janela em que a informação vale", o classificador lia "Formatura:
- * 11/12/2026" e devolvia validFrom 11/12, o que sumia com o comunicado
- * exatamente durante os meses em que as famílias precisam lê-lo. O documento
- * não dava erro nem reaparecia; simplesmente não existia para ninguém.
- *
- * A regra aqui é a da secretaria: documento publicado vale a partir de agora.
- * Agendar publicação para depois é decisão humana, e quando existir tela para
- * isso ela entra por `overrides`, não pela dedução do modelo.
- *
- * Comparação em texto porque `YYYY-MM-DD` já ordena cronologicamente, e
- * converter para `Date` traria o erro de fuso de volta.
- */
-export function safeValidFrom(
-  validFrom: string | null,
-  today = new Date().toISOString().slice(0, 10),
-): string | null {
-  if (!validFrom) return null;
-  return validFrom > today ? null : validFrom;
-}
 
 function safeName(fileName: string): string {
   return fileName
@@ -373,11 +327,16 @@ export function contextHeader(doc: {
   type: string;
   docNumber: number | null;
   anoLetivo: number | null;
+  documentDate?: string | null;
   series: string[];
 }): string {
   const parts = [doc.type];
   if (doc.docNumber) parts.push(`nº ${doc.docNumber}`);
   parts.push(doc.title);
+  // A data de emissão entra aqui para o trecho carregar a própria idade: é o
+  // que permite ao modelo dizer qual comunicado prevalece quando dois se
+  // contradizem, sem precisar consultar mais nada.
+  if (doc.documentDate) parts.push(`de ${doc.documentDate}`);
   if (doc.anoLetivo) parts.push(`ano letivo ${doc.anoLetivo}`);
   if (doc.series.length > 0) parts.push(doc.series.map(serieLabel).join(', '));
   return `[${parts.join(' · ')}]`;

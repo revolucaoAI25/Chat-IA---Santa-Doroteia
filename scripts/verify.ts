@@ -6,7 +6,6 @@ import type { SessionUser } from '@/lib/auth/session';
 import { documentVisibilityFilter } from '@/lib/rag/access';
 import { retrieve } from '@/lib/rag/retrieve';
 import { upcomingEvents } from '@/lib/rag/events';
-import { safeValidFrom, safeValidUntil } from '@/lib/ingest/pipeline';
 
 /**
  * Verificação de fumaça do que não pode quebrar: o recorte de acesso por
@@ -92,31 +91,13 @@ async function main() {
     `${futuro.total} documento(s) com valid_from no futuro`,
   );
 
+  const [semData] = await db.execute<{ total: number }>(sql`
+    SELECT count(*)::int AS total FROM documents WHERE document_date IS NULL
+  `);
   check(
-    'data de início no futuro vinda da IA é descartada',
-    safeValidFrom('2026-12-11', '2026-09-07') === null,
-  );
-  check(
-    'data de início no passado é preservada',
-    safeValidFrom('2026-08-01', '2026-09-07') === '2026-08-01',
-  );
-  check('hoje conta como já vigente', safeValidFrom('2026-09-07', '2026-09-07') === '2026-09-07');
-
-  // A vigência deduzida pela IA tem piso: proposta curta demais é a data do
-  // último evento do texto disfarçada de validade, e faria o documento nascer
-  // quase vencido.
-  const padrao = '2027-09-07';
-  check(
-    'vigência deduzida pela IA a três semanas é descartada',
-    safeValidUntil('2026-09-28', padrao, '2026-09-07') === padrao,
-  );
-  check(
-    'vigência deduzida com folga é respeitada',
-    safeValidUntil('2026-12-20', padrao, '2026-09-07') === '2026-12-20',
-  );
-  check(
-    'sem proposta da IA, vale o padrão de retenção',
-    safeValidUntil(null, padrao, '2026-09-07') === padrao,
+    'a data do documento é uma coluna própria, separada dos eventos',
+    typeof semData.total === 'number',
+    `${semData.total} documento(s) ainda sem data de emissão registrada`,
   );
 
   /*

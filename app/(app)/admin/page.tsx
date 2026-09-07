@@ -124,6 +124,7 @@ async function IngestTab({ tenantId }: { tenantId: string }) {
         series: documents.series,
         anoLetivo: documents.anoLetivo,
         etapa: documents.etapa,
+        documentDate: documents.documentDate,
         validFrom: documents.validFrom,
         validUntil: documents.validUntil,
         audience: documents.audience,

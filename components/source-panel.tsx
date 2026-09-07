@@ -14,6 +14,7 @@ export interface SourceDocument {
   excerpt: string;
   anoLetivo?: number | null;
   etapa?: string | null;
+  documentDate?: string | null;
   series?: string[];
   segments?: string[];
   validUntil?: string | null;
@@ -210,9 +211,10 @@ export function SourcePanel({
 }
 
 function Metadata({ source }: { source: SourceDocument }) {
-  const linhas: Array<[string, string]> = [
-    ['Vale para', scopeLabel(source.series, source.segments)],
-  ];
+  const linhas: Array<[string, string]> = [];
+  // Primeiro a data do documento: é o que identifica o comunicado.
+  if (source.documentDate) linhas.push(['Documento de', formatDate(source.documentDate)]);
+  linhas.push(['Vale para', scopeLabel(source.series, source.segments)]);
   if (source.anoLetivo) linhas.push(['Ano letivo', String(source.anoLetivo)]);
   if (source.etapa) linhas.push(['Etapa', source.etapa]);
   if (source.validUntil) linhas.push(['Vigente até', formatDate(source.validUntil)]);

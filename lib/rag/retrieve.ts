@@ -14,6 +14,8 @@ export interface RetrievedChunk {
   page: number | null;
   anoLetivo: number | null;
   etapa: string | null;
+  /** Data do cabeçalho. Diz qual documento é mais recente quando dois divergem. */
+  documentDate: string | null;
   validUntil: string | null;
   series: string[];
   segments: string[];
@@ -94,6 +96,7 @@ interface RawRow extends Record<string, unknown> {
   page: number | null;
   ano_letivo: number | null;
   etapa: string | null;
+  document_date: string | null;
   valid_until: string | null;
   series: string[];
   segments: string[];
@@ -122,6 +125,7 @@ const SELECTION = sql`
   d.doc_number    AS doc_number,
   d.ano_letivo    AS ano_letivo,
   d.etapa         AS etapa,
+  d.document_date AS document_date,
   d.valid_until   AS valid_until,
   d.series        AS series,
   d.segments      AS segments,
@@ -263,6 +267,7 @@ function toChunk(row: RawRow, score: number): RetrievedChunk {
     page: row.page,
     anoLetivo: row.ano_letivo,
     etapa: row.etapa,
+    documentDate: row.document_date,
     validUntil: row.valid_until,
     series: row.series ?? [],
     segments: row.segments ?? [],

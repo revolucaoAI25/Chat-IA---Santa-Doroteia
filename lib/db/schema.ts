@@ -223,7 +223,24 @@ export const documents = pgTable(
     etapa: text('etapa'),
     anoLetivo: integer('ano_letivo'),
 
-    /** Vigência: fora da janela o documento deixa de ser fonte para a IA. */
+    /**
+     * Data impressa no cabeçalho do documento ("Belo Horizonte, 08 de outubro
+     * de 2026"). É o que data o comunicado na tela e o que permite dizer qual
+     * é o mais recente quando dois se contradizem.
+     *
+     * Nunca vira evento de calendário — para isso existem as datas do corpo,
+     * em `documentEvents`. Confundir as duas foi o que fazia a data de emissão
+     * aparecer na agenda como se fosse compromisso.
+     */
+    documentDate: date('document_date'),
+
+    /**
+     * Vigência: fora da janela o documento deixa de ser fonte para a IA.
+     *
+     * `validFrom` é publicação agendada, e vem SÓ da administração — deduzi-la
+     * do texto fazia o comunicado sumir até a data do evento que ele anuncia.
+     * Vazio significa "vale desde já", que é o caso normal.
+     */
     validFrom: date('valid_from'),
     validUntil: date('valid_until'),
 

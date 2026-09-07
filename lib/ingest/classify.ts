@@ -31,7 +31,8 @@ const analysisSchema = z.object({
   series: z.array(z.string()),
   etapa: z.string().nullable(),
   anoLetivo: z.number().int().nullable(),
-  validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  /** Data impressa no cabeçalho/assinatura. Data o documento; nunca vira evento. */
+  documentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   events: z.array(eventSchema),
 });
@@ -44,7 +45,7 @@ const jsonSchema = {
   additionalProperties: false,
   required: [
     'title', 'docNumber', 'type', 'summary', 'segments', 'series',
-    'etapa', 'anoLetivo', 'validFrom', 'validUntil', 'events',
+    'etapa', 'anoLetivo', 'documentDate', 'validUntil', 'events',
   ],
   properties: {
     title: { type: 'string' },
@@ -55,7 +56,7 @@ const jsonSchema = {
     series: { type: 'array', items: { type: 'string', enum: SERIE_VALUES } },
     etapa: { type: ['string', 'null'] },
     anoLetivo: { type: ['integer', 'null'] },
-    validFrom: { type: ['string', 'null'] },
+    documentDate: { type: ['string', 'null'] },
     validUntil: { type: ['string', 'null'] },
     events: {
       type: 'array',
@@ -92,11 +93,11 @@ REGRAS DE CLASSIFICAÇÃO
 - "segments" e "series": SOMENTE o que o documento indicar explicitamente. Se ele vale para toda a escola, devolva listas vazias — lista vazia significa "todo mundo vê", e é melhor do que um palpite errado que esconderia o documento de quem precisa.
 - "summary": 1 a 2 frases dizendo a que o documento serve, em português, sem repetir o título.
 - "validUntil": até quando a informação ainda vale, ou seja, a partir de quando o documento vira histórico. Um cronograma da 1ª etapa deixa de valer quando a etapa acaba. Sem base para concluir, null.
-- "validFrom": quase sempre **null**. Não é a data do que o documento anuncia — é a data a partir da qual o documento passaria a valer, e um comunicado já publicado vale desde já. Um comunicado de outubro sobre a formatura de dezembro tem validFrom null, e NÃO "2026-12-11": preencher a data do evento aqui esconderia o comunicado justamente durante os meses em que as famílias precisam lê-lo. Só preencha se o próprio documento disser que ele só entra em vigor numa data futura (um regulamento novo que começa a valer no ano que vem, por exemplo).
+- "documentDate": a data DO DOCUMENTO — a que aparece no cabeçalho, na linha de local e data ou junto da assinatura ("Belo Horizonte, 08 de outubro de 2026" -> "2026-10-08"). É quando o documento foi escrito, e é o que permite dizer qual comunicado é mais recente quando dois se contradizem. Não confunda com as datas do corpo: um comunicado emitido em outubro que anuncia a formatura de dezembro tem documentDate "2026-10-08", nunca "2026-12-11". Se o documento não trouxer data própria, null.
 
 REGRAS DE EXTRAÇÃO DE DATAS (o ponto mais importante)
 - Extraia apenas datas de COISAS QUE VÃO ACONTECER: provas, recuperações, simulados, entregas, eventos, reuniões, prazos.
-- NUNCA extraia a data de emissão/assinatura do documento, nem datas citadas como referência histórica ou de contexto ("como informado em 12/03").
+- NUNCA extraia a data de emissão/assinatura do documento — essa vai em "documentDate" e **não** pode virar evento. Também não extraia datas citadas como referência histórica ou de contexto ("como informado em 12/03").
 - Uma linha de cronograma com várias matérias vira VÁRIOS eventos, um por matéria/data.
 - "startsOn"/"endsOn" sempre em YYYY-MM-DD. Um intervalo ("de 08/06 a 17/06") preenche os dois; uma data única deixa "endsOn" null.
 - Se o ano não estiver escrito, use o ano letivo do documento; se nem esse existir, use o ano da data de referência informada no contexto.
@@ -248,7 +249,7 @@ function heuristicAnalysis(input: ClassifyInput): DocumentAnalysis {
     series: [],
     etapa: null,
     anoLetivo: yearMatch ? Number(yearMatch[1]) : null,
-    validFrom: null,
+    documentDate: null,
     validUntil: null,
     events,
   };

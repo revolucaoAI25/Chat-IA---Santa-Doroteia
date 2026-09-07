@@ -41,16 +41,14 @@ SET valid_from = NULL, updated_at = now()
 WHERE valid_from > CURRENT_DATE;
 
 -- ---------------------------------------------------------------------------
--- 3. Correção opcional: estender a vigência curta demais.
+-- 3. Correção opcional: estender a vigência de quem já venceu ou está por vencer.
 --
--- O código novo já recusa uma vigência deduzida pela IA com menos de 90 dias —
--- proposta assim quase sempre é a data do último evento do texto, e não uma
--- estimativa de validade. Para os documentos já ingeridos, este UPDATE aplica a
--- mesma regra: doze meses a partir de hoje.
+-- A vigência deduzida pela IA é intencional — um cronograma da 1ª etapa deve
+-- mesmo parar de responder na 3ª. Rode este bloco apenas se algum documento
+-- tiver nascido com prazo curto demais e você quiser trazê-lo de volta.
 --
 -- Rode SÓ se você não tiver definido nenhuma vigência à mão; se definiu, este
--- comando sobrescreveria a sua escolha. Nesse caso, acrescente uma condição
--- para poupar os documentos que você configurou.
+-- comando sobrescreveria a sua escolha.
 -- ---------------------------------------------------------------------------
 
 UPDATE documents

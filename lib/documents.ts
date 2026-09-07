@@ -26,7 +26,9 @@ export interface LibraryDocument {
   audience: string[];
   validUntil: string | null;
   pageCount: number | null;
-  /** ISO. É a data de entrada no sistema, usada para ordenar a lista. */
+  /** Data impressa no cabeçalho do documento. É a que identifica o comunicado. */
+  documentDate: string | null;
+  /** ISO. Entrada no sistema — só usada quando não há data no cabeçalho. */
   createdAt: string;
 }
 
@@ -43,6 +45,7 @@ interface Row extends Record<string, unknown> {
   audience: string[];
   valid_until: string | null;
   page_count: number | null;
+  document_date: string | null;
   created_at: Date;
 }
 
@@ -54,10 +57,13 @@ export async function listVisibleDocuments(
     SELECT
       d.id, d.title, d.type::text AS type, d.doc_number, d.summary,
       d.ano_letivo, d.etapa, d.segments, d.series, d.audience,
-      d.valid_until, d.page_count, d.created_at
+      d.valid_until, d.page_count, d.document_date, d.created_at
     FROM documents d
     WHERE ${documentVisibilityFilter(user, 'd')}
-    ORDER BY d.created_at DESC
+    -- Ordenado pela data do próprio documento, não pela de upload: numa
+    -- importação de acervo antigo, tudo entra no mesmo dia e a ordem de
+    -- chegada não diz nada a quem procura o comunicado mais recente.
+    ORDER BY COALESCE(d.document_date, d.created_at::date) DESC, d.created_at DESC
     LIMIT ${limit}
   `);
 
@@ -76,6 +82,7 @@ export async function listVisibleDocuments(
     audience: row.audience ?? [],
     validUntil: row.valid_until,
     pageCount: row.page_count,
+    documentDate: row.document_date,
     createdAt: new Date(row.created_at).toISOString(),
   }));
 }

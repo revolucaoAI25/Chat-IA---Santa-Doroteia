@@ -73,6 +73,12 @@ export async function POST(request: Request) {
     overrides.validUntil = validUntil;
   }
 
+  // Publicação agendada. Só a administração define — a IA nem é perguntada.
+  const validFrom = form.get('validFrom');
+  if (typeof validFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
+    overrides.validFrom = validFrom;
+  }
+
   const type = String(form.get('type') ?? '');
   if ((documentType.enumValues as readonly string[]).includes(type)) {
     overrides.type = type as DocumentTypeValue;

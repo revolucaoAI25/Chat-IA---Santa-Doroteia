@@ -360,23 +360,28 @@ de `DEFAULT_RETENTION_MONTHS` (12). Fora da janela o documento **continua no
 acervo para auditoria, mas deixa de ser fonte para o assistente** — é por isso
 que o filtro de vigência está na consulta, e não num job de exclusão.
 
-**Duas travas contra a dedução automática errar para o lado de esconder**, que é
-o erro caro: ninguém recebe aviso, a pessoa só ouve "não encontrei".
+**A data do documento é uma coisa; as datas que ele anuncia são outra.**
 
-- `safeValidFrom` **descarta início de vigência no futuro** vindo do modelo.
-  Perguntando "a janela em que a informação vale", o classificador lia
-  "Formatura: 11/12/2026" e devolvia essa data como início — sumindo com o
-  comunicado exatamente durante os meses em que as famílias precisam lê-lo.
-  Documento publicado vale a partir de agora; agendar publicação para depois é
-  decisão humana, e entra por `overrides`.
-- `safeValidUntil` impõe um **piso de 90 dias** à vigência deduzida. Proposta
-  mais curta que isso quase sempre é a data do último evento do texto
-  disfarçada de validade, e faria o documento nascer quase vencido. A escolha
-  explícita do administrador não tem piso nenhum.
+- `document_date` é a data impressa no cabeçalho ("Belo Horizonte, 08 de outubro
+  de 2026"). Data o comunicado na tela, ordena o acervo e entra no cabeçalho de
+  cada trecho — é o que permite ao modelo dizer qual documento prevalece quando
+  dois se contradizem. **Nunca vira evento.**
+- As datas do corpo ("prova em 09/12", "entrega até 30/10") vão para
+  `document_events`, e só elas alimentam a agenda.
 
-Para o acervo ingerido antes dessas travas, o
-[`docs/corrigir-vigencias.sql`](./docs/corrigir-vigencias.sql) mostra o estrago
-e o desfaz.
+Confundir as duas foi o que fez a data de emissão aparecer na agenda como
+compromisso, e a data do evento virar início de vigência.
+
+**`validFrom` é publicação agendada, e vem só da administração.** A IA não é
+mais perguntada sobre ela. Enquanto era, devolvia a data do evento que o
+documento anuncia, e o comunicado sumia de todo mundo até lá — sem erro e sem
+aviso. O padrão passa a ser o que a secretaria espera: **subiu, está no ar**.
+Para segurar a publicação existe o campo *"Publicar a partir de"* no formulário
+de upload.
+
+A tela de Ingestão marca em vermelho todo documento que ninguém enxerga
+("Vencido" ou "Só aparece em DD/MM"). É o único lugar onde um documento fora da
+janela continua visível; sem o aviso, ele some e não há como descobrir por quê.
 
 ---
 

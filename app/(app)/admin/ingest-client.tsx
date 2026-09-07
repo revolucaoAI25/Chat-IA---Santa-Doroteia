@@ -29,6 +29,8 @@ interface RecentDocument {
   segments: Segment[];
   series: string[];
   anoLetivo: number | null;
+  /** Data impressa no cabeçalho do documento. Diferente de `createdAt`. */
+  documentDate: string | null;
   validFrom: string | null;
   validUntil: string | null;
   audience: Role[];
@@ -98,6 +100,8 @@ export function IngestClient({
   const [staged, setStaged] = useState<File[]>([]);
   const [audience, setAudience] = useState<Role[]>([]);
   const [validUntil, setValidUntil] = useState('');
+  /** Publicação agendada. Vazio — o normal — significa "no ar assim que subir". */
+  const [validFrom, setValidFrom] = useState('');
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -169,6 +173,7 @@ export function IngestClient({
       body.append('file', file);
       for (const role of audience) body.append('audience', role);
       if (validUntil) body.append('validUntil', validUntil);
+      if (validFrom) body.append('validFrom', validFrom);
       if (type) body.append('type', type);
       if (anoLetivo) body.append('anoLetivo', anoLetivo);
       if (etapa) body.append('etapa', etapa);
@@ -495,7 +500,8 @@ export function IngestClient({
               ) : null}
             </div>
 
-            <div className="mt-5 max-w-xs">
+            <div className="mt-5 grid max-w-xl gap-5 sm:grid-cols-2">
+              <div>
               <label className="field-label" htmlFor="valid-until">
                 Vigência até
               </label>
@@ -514,10 +520,31 @@ export function IngestClient({
                 Deixando em branco, quem decide é <strong className="text-ink">a IA</strong>, a
                 partir do próprio conteúdo: um cronograma da 1ª etapa vence quando a etapa acaba.
                 Por isso a data que aparece depois costuma não ser de um ano. Ela só cai no padrão
-                de 12 meses quando a IA não consegue deduzir nada — ou quando deduz um prazo curto
-                demais, abaixo de 90 dias, que quase sempre é a data do último evento do texto e
-                não a validade da informação.
+                de 12 meses quando a IA não consegue deduzir nada.
               </p>
+              </div>
+
+              <div>
+                <label className="field-label" htmlFor="valid-from">
+                  Publicar a partir de
+                </label>
+                <input
+                  id="valid-from"
+                  type="date"
+                  value={validFrom}
+                  onChange={(event) => setValidFrom(event.target.value)}
+                  className="field"
+                />
+                <p className="mt-2 text-[0.75rem] leading-relaxed text-muted">
+                  <strong className="text-ink">Deixe em branco</strong> na dúvida: o documento
+                  entra no ar assim que terminar de subir, que é o normal.
+                </p>
+                <p className="mt-2 text-[0.75rem] leading-relaxed text-muted">
+                  Preencha só para segurar a publicação — um comunicado pronto que a secretaria
+                  só quer divulgar semana que vem. Até lá ele não aparece para ninguém, nem no
+                  chat, nem na lista.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -651,8 +678,13 @@ export function IngestClient({
                 </div>
 
                 <p className="mt-3 border-t border-line pt-2.5 text-[0.75rem] text-muted">
-                  {doc.chunkCount} trecho{doc.chunkCount === 1 ? '' : 's'} · {doc.eventCount} evento
-                  {doc.eventCount === 1 ? '' : 's'} ·{' '}
+                  {/* A data do documento vem primeiro: é a que identifica o
+                      comunicado. A de upload só interessa para auditoria. */}
+                  {doc.documentDate
+                    ? `Documento de ${formatDate(doc.documentDate)}`
+                    : 'Sem data no cabeçalho'}{' '}
+                  · {doc.chunkCount} trecho{doc.chunkCount === 1 ? '' : 's'} · {doc.eventCount}{' '}
+                  evento{doc.eventCount === 1 ? '' : 's'} ·{' '}
                   {doc.validUntil ? `vigente até ${formatDate(doc.validUntil)}` : 'sem vigência'}
                 </p>
               </li>
