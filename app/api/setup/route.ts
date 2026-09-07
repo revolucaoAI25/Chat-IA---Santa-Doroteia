@@ -54,16 +54,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // As migrações precisam de sessão estável: se a aplicação estiver no
-    // pooler de transações (6543), usamos a conexão direta informada em
-    // DATABASE_URL_DIRECT — ou avisamos, em vez de falhar no meio do DDL.
+    /*
+     * As migrações precisam de sessão estável — DDL com vários statements não
+     * funciona no pooler de transações (6543).
+     *
+     * O endereço de instalação deve ser o **Session pooler** (5432 no host
+     * `...pooler.supabase.com`), e não a "Direct connection": no plano gratuito
+     * do Supabase a conexão direta só responde por IPv6, e a Vercel não fala
+     * IPv6 — o pedido nem chega ao banco.
+     */
     const migrationUrl = process.env.DATABASE_URL_DIRECT ?? url;
     if (migrationUrl.includes(':6543')) {
       return NextResponse.json(
         {
           error:
-            'As migrações precisam da conexão direta (porta 5432). Adicione a variável ' +
-            'DATABASE_URL_DIRECT com a "Direct connection" do Supabase e rode de novo.',
+            'As migrações precisam de uma conexão em modo sessão (porta 5432). ' +
+            'Adicione a variável DATABASE_URL_DIRECT com o "Session pooler" do Supabase ' +
+            '(botão Connect → aba Direct connection) e rode de novo.',
         },
         { status: 400 },
       );

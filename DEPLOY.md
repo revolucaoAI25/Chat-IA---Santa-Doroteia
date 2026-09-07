@@ -42,21 +42,37 @@ que você copia na Parte 1.
 
 ### 1.3 Copiar os dois endereços de conexão
 
-Menu lateral → **Project Settings** (a engrenagem) → **Database**.
+Clique no botão verde **Connect**, no alto da página (ao lado do nome do
+projeto). Abre uma janela "Connect to your project".
 
-Na seção **Connection string**, você precisa de **dois** endereços diferentes.
-Anote os dois:
+Nessa janela, escolha a aba **Direct connection** — não a "Framework", que é a
+que vem selecionada. Ali aparecem três endereços, um abaixo do outro.
 
-| Onde aparece | Como vou chamar | Porta |
+Você precisa de **dois** deles:
+
+| Nome na tela | Porta | Como vou chamar |
 |---|---|---|
-| **Transaction pooler** | endereço do dia a dia | `6543` |
-| **Direct connection** | endereço de instalação | `5432` |
+| **Transaction pooler** | `6543` | endereço da aplicação |
+| **Session pooler** | `5432` | endereço de instalação |
 
-Em ambos, troque `[YOUR-PASSWORD]` pela senha do passo 1.1.
+Copie os dois e, em cada um, troque `[YOUR-PASSWORD]` pela senha do passo 1.1.
 
-> **Por que dois?** O endereço do dia a dia aguenta muita gente ao mesmo tempo,
-> mas não serve para criar tabelas. O de instalação faz o contrário. A aplicação
-> usa cada um no seu momento.
+> **Ignore o "Direct connection"**, o primeiro da lista. No plano gratuito ele
+> só responde por IPv6, e a Vercel não fala IPv6 — a conexão simplesmente não
+> se estabelece. O **Session pooler** faz o mesmo trabalho (é o modo que
+> permite criar tabelas) e funciona por IPv4.
+
+> **Por que dois?** O da aplicação aguenta muita gente ao mesmo tempo, mas não
+> serve para criar tabelas. O de instalação faz o contrário. A aplicação usa
+> cada um no seu momento.
+
+Os dois endereços de pooler se parecem com isto — repare que mudam **só na
+porta**, e que o usuário tem um ponto no meio (`postgres.abcdefgh`):
+
+```
+postgresql://postgres.abcdefgh:SUA_SENHA@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
+postgresql://postgres.abcdefgh:SUA_SENHA@aws-0-sa-east-1.pooler.supabase.com:5432/postgres
+```
 
 ### 1.4 Criar o bucket dos arquivos
 
@@ -102,8 +118,8 @@ uma. Marque as três caixas (Production, Preview, Development) em todas.
 
 | Nome | O que colar |
 |---|---|
-| `DATABASE_URL` | o endereço do dia a dia (porta **6543**) |
-| `DATABASE_URL_DIRECT` | o endereço de instalação (porta **5432**) |
+| `DATABASE_URL` | o endereço da aplicação — **Transaction pooler**, porta **6543** |
+| `DATABASE_URL_DIRECT` | o endereço de instalação — **Session pooler**, porta **5432** |
 | `SESSION_SECRET` | uma frase aleatória longa — pode gerar em <https://generate-secret.vercel.app/32> |
 | `OPENAI_API_KEY` | sua chave da OpenAI |
 | `SUPABASE_URL` | o Project URL do passo 1.5 |
@@ -178,7 +194,8 @@ duplicado nem tem a senha sobrescrita.
 | Resposta | O que fazer |
 |---|---|
 | `404 Não encontrado` | O `SETUP_TOKEN` não bate, ou a variável não foi salva. Confira na Vercel e **refaça o deploy** — variáveis novas só valem no próximo build. |
-| `As migrações precisam da conexão direta (porta 5432)` | Faltou a `DATABASE_URL_DIRECT`, ou ela ficou com a porta 6543. |
+| `As migrações precisam de uma conexão em modo sessão` | Faltou a `DATABASE_URL_DIRECT`, ou ela ficou com a porta 6543. Use o **Session pooler**. |
+| `connect ENETUNREACH` ou trava sem responder | Você usou a **Direct connection**. No plano gratuito ela é IPv6 e a Vercel não alcança. Troque pelo **Session pooler**. |
 | `type "vector" does not exist` | A extensão do passo 1.2 não foi ativada. |
 | `password authentication failed` | O `[YOUR-PASSWORD]` continua literal em algum dos endereços. |
 | `Faltam SETUP_ADMIN_EMAIL e SETUP_ADMIN_PASSWORD` | O schema foi criado; falta preencher essas duas e chamar de novo. |
