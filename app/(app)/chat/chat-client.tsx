@@ -198,12 +198,20 @@ export function ChatClient({
             ) : null}
           </div>
 
-          {/* Torna visível o que a IA sabe sobre quem pergunta. */}
+          {/*
+            Mostra exatamente o que vai para o prompt — nada além disso. A
+            turma, por exemplo, está no cadastro mas não é enviada à IA, então
+            exibi-la aqui daria a entender uma personalização que não existe.
+          */}
           <div className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[0.75rem] text-muted">
             <span className="eyebrow-muted">Falando com a IA como</span>
             <span className="chip">{ROLE_LABELS[user.role]}</span>
-            {user.serie ? <span className="chip">{serieLabel(user.serie)}</span> : null}
-            {user.turma ? <span className="chip">Turma {user.turma}</span> : null}
+            {user.role === 'aluno' && user.serie ? (
+              <span className="chip">{serieLabel(user.serie)}</span>
+            ) : null}
+            {user.role !== 'aluno' && user.disciplinas.length > 0 ? (
+              <span className="chip">{user.disciplinas.join(', ')}</span>
+            ) : null}
           </div>
 
           {empty ? (

@@ -9,12 +9,18 @@ import { DEMO_MODE } from '@/lib/ai/provider';
 import { storageDriver } from '@/lib/storage';
 import { IngestClient } from './ingest-client';
 import { WhitelabelClient } from './whitelabel-client';
+import { UsersClient, type AdminUser } from './users-client';
+import { users as usersTable } from '@/lib/db/schema';
+import { effectiveSerie } from '@/lib/series-progression';
+import { currentAnoLetivo } from '@/lib/academic-calendar';
+import { asc } from 'drizzle-orm';
 
 export const metadata = { title: 'Administração · Colégio Santa Dorotéia' };
 export const dynamic = 'force-dynamic';
 
 const TABS = [
   { key: 'ingestao', label: 'Ingestão' },
+  { key: 'usuarios', label: 'Usuários' },
   { key: 'whitelabel', label: 'Whitelabel' },
 ] as const;
 
@@ -55,6 +61,8 @@ export default async function AdminPage({
           <div className="mt-8">
             {active === 'whitelabel' ? (
               <WhitelabelTab tenantId={user.tenantId} />
+            ) : active === 'usuarios' ? (
+              <UsersTab tenantId={user.tenantId} />
             ) : (
               <IngestTab tenantId={user.tenantId} />
             )}
@@ -139,4 +147,40 @@ async function IngestTab({ tenantId }: { tenantId: string }) {
       storage={storageDriver()}
     />
   );
+}
+
+async function UsersTab({ tenantId }: { tenantId: string }) {
+  const rows = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.tenantId, tenantId))
+    .orderBy(asc(usersTable.role), asc(usersTable.name));
+
+  const list: AdminUser[] = rows.map((u) => {
+    // A linha mostra as duas coisas: a série cadastrada e a vigente depois do
+    // avanço automático. Sem isso, o administrador não entende por que o aluno
+    // aparece numa série diferente da que ele digitou.
+    const effective = effectiveSerie(u.serie, u.serieAnoLetivo);
+    return {
+      id: u.id,
+      name: u.name,
+      matricula: u.matricula,
+      email: u.email,
+      role: u.role,
+      serie: u.serie,
+      serieVigente: effective.serie,
+      serieAnoLetivo: u.serieAnoLetivo,
+      turma: u.turma,
+      segment: effective.segment ?? u.segment,
+      extraSeries: u.extraSeries,
+      disciplinas: u.disciplinas,
+      seriesTaught: u.seriesTaught,
+      segmentsTaught: u.segmentsTaught,
+      active: u.active,
+      concluido: effective.concluido,
+      lastSeenAt: u.lastSeenAt?.toISOString() ?? null,
+    };
+  });
+
+  return <UsersClient users={list} anoLetivo={currentAnoLetivo()} />;
 }

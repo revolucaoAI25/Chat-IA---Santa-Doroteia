@@ -17,6 +17,7 @@ import { chunkPages } from '@/lib/ingest/chunk';
 import { contextHeader } from '@/lib/ingest/pipeline';
 import { documentTypeLabel } from '@/lib/taxonomy';
 import { DEMO_MODE } from '@/lib/ai/provider';
+import { currentAnoLetivo } from '@/lib/academic-calendar';
 import { SEED_DOCUMENTS } from './seed-data';
 
 /**
@@ -61,6 +62,7 @@ async function main() {
       role: 'aluno' as const,
       segment: 'fundamental_ii' as const,
       serie: '7_ano_fund2',
+      serieAnoLetivo: currentAnoLetivo(),
       turma: '7A',
     },
     {
@@ -70,6 +72,7 @@ async function main() {
       role: 'aluno' as const,
       segment: 'ensino_medio' as const,
       serie: '2_serie_em',
+      serieAnoLetivo: currentAnoLetivo(),
       turma: '2B',
     },
     {
@@ -79,7 +82,12 @@ async function main() {
       role: 'professor' as const,
       segment: 'fundamental_ii' as const,
       serie: null,
+      serieAnoLetivo: null,
       turma: null,
+      // Contexto definido pela secretaria, na aba Usuários.
+      disciplinas: ['Matemática', 'Física'],
+      seriesTaught: ['7_ano_fund2', '8_ano_fund2', '9_ano_fund2'],
+      segmentsTaught: ['fundamental_ii' as const],
     },
     {
       matricula: 'ADM001',
@@ -88,6 +96,7 @@ async function main() {
       role: 'admin' as const,
       segment: null,
       serie: null,
+      serieAnoLetivo: null,
       turma: null,
     },
   ];

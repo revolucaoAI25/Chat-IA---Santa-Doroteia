@@ -46,8 +46,9 @@ async function main() {
       turma: u.turma,
       extraSeries: u.extraSeries,
       disciplinas: u.disciplinas,
+      seriesTaught: u.seriesTaught,
       segmentsTaught: u.segmentsTaught,
-      contextNote: u.contextNote,
+      concluido: false,
     };
   };
 

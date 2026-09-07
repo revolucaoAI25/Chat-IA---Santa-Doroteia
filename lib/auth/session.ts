@@ -4,6 +4,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
+import { effectiveSerie } from '@/lib/series-progression';
 import type { Role, Segment } from '@/lib/db/schema';
 
 export const SESSION_COOKIE = 'sd_session';
@@ -20,13 +21,20 @@ export interface SessionUser {
   email: string;
   matricula: string;
   role: Role;
+
+  /** Série e segmento VIGENTES — já com o avanço automático de ano aplicado. */
   segment: Segment | null;
   serie: string | null;
   turma: string | null;
   extraSeries: string[];
+
+  /** Contexto do professor, definido pela secretaria. */
   disciplinas: string[];
+  seriesTaught: string[];
   segmentsTaught: Segment[];
-  contextNote: string | null;
+
+  /** Concluiu o Ensino Médio pelo avanço automático; cadastro pede atenção. */
+  concluido: boolean;
 }
 
 function secretKey(): Uint8Array {
@@ -92,6 +100,10 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
   if (!user || !user.active) return null;
 
+  // A série vigente é derivada da data, não lida crua do banco: o cadastro
+  // guarda "7º ano em 2026" e o ano seguinte responde 8º ano sozinho.
+  const effective = effectiveSerie(user.serie, user.serieAnoLetivo);
+
   return {
     id: user.id,
     tenantId: user.tenantId,
@@ -99,13 +111,14 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
     email: user.email,
     matricula: user.matricula,
     role: user.role,
-    segment: user.segment,
-    serie: user.serie,
+    segment: effective.segment ?? user.segment,
+    serie: effective.serie,
     turma: user.turma,
     extraSeries: user.extraSeries,
     disciplinas: user.disciplinas,
+    seriesTaught: user.seriesTaught,
     segmentsTaught: user.segmentsTaught,
-    contextNote: user.contextNote,
+    concluido: effective.concluido,
   };
 });
 

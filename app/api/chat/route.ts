@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { asc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { conversations, messages } from '@/lib/db/schema';
@@ -13,6 +13,13 @@ import { checkChatRateLimit, touchUser } from '@/lib/rate-limit';
 // A busca vetorial e a geração precisam do runtime Node (driver Postgres).
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+/**
+ * Turnos de conversa carregados como contexto. A conversa não persiste entre
+ * sessões — cada visita começa do zero, e este limite impede que uma sessão
+ * longa cresça indefinidamente.
+ */
+const HISTORY_TURNS = 4;
 
 const bodySchema = z.object({
   question: z.string().min(1).max(2000),
@@ -68,12 +75,26 @@ export async function POST(request: Request) {
     conversationId = created.id;
   }
 
-  const history = await db
+  /*
+   * Janela de contexto da conversa.
+   *
+   * São as ÚLTIMAS mensagens, não as primeiras: ordena decrescente, corta e
+   * inverte. Ordenar crescente com LIMIT devolveria o começo da conversa, que
+   * é justamente a parte que não interessa para resolver "e a de história?".
+   *
+   * O limite existe porque a conversa não é resumida: sem ele, cada pergunta
+   * numa conversa longa carregaria tudo o que veio antes, encarecendo e
+   * diluindo o contexto. Quatro turnos cobrem o encadeamento real das
+   * perguntas de acompanhamento.
+   */
+  const recent = await db
     .select({ role: messages.role, content: messages.content })
     .from(messages)
     .where(eq(messages.conversationId, conversationId))
-    .orderBy(asc(messages.createdAt))
-    .limit(20);
+    .orderBy(desc(messages.createdAt))
+    .limit(HISTORY_TURNS * 2);
+
+  const history = recent.reverse();
 
   await db.insert(messages).values({ conversationId, role: 'user', content: question });
   void touchUser(user.id);

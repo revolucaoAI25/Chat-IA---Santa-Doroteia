@@ -15,7 +15,7 @@ OCR, extração automática de datas e controle de acesso por perfil de verdade.
 |---|---|
 | Login por matrícula, com perfis aluno/professor/coordenação/admin | ✅ |
 | Chat com resposta em streaming e citação dos documentos | ✅ |
-| IA contextualizada por quem pergunta (série, turma, papel) | ✅ |
+| IA contextualizada por quem pergunta (papel + série, ou disciplinas) | ✅ |
 | Ingestão de PDF, DOCX, CSV, XLSX, TXT e imagens | ✅ |
 | OCR para digitalizações e imagens (via modelo multimodal) | ✅ |
 | Classificação automática: tipo, segmento, série, ano letivo, vigência | ✅ |
@@ -29,7 +29,9 @@ OCR, extração automática de datas e controle de acesso por perfil de verdade.
 | Reescrita de pergunta (resolve "e a de história?") | ✅ |
 | Pergunta de esclarecimento quando — e só quando — é ambíguo | ✅ |
 | Agenda estruturada injetada nas perguntas de data | ✅ |
-| Perfil com contexto acadêmico atualizável pela própria pessoa | ✅ |
+| Contexto do usuário mantido pela secretaria (tela de Usuários) | ✅ |
+| Série avança sozinha na virada do ano letivo | ✅ |
+| Data e etapa (trimestre) vigentes no contexto da IA | ✅ |
 | Feedback útil/não útil por resposta | ✅ |
 | Limite de perguntas por usuário | ✅ |
 
@@ -39,6 +41,12 @@ lembretes por e-mail e relatórios.
 
 **Como publicar:** o passo a passo de Supabase e Vercel está em
 [DEPLOY.md](./DEPLOY.md).
+
+**Para testar a ingestão:** há dez PDFs fictícios em
+[`documentos-exemplo/`](./documentos-exemplo/), com papel timbrado, número,
+data e destinatário. Cada um exercita uma dificuldade diferente da extração de
+datas, e dois são restritos ao corpo docente para conferir o recorte de acesso.
+O que perguntar depois de subi-los está no README daquela pasta.
 
 ---
 
@@ -60,10 +68,10 @@ permitem alternar entre os perfis sem digitar senha.
 
 | Matrícula | Perfil | Contexto |
 |---|---|---|
-| `2026074` | Aluno / Responsável | 7º ano · Fundamental II · Turma 7A |
+| `2026074` | Aluno / Responsável | 7º ano · Fundamental II |
 | `2026112` | Aluno / Responsável | 2ª série · Ensino Médio |
-| `P1042` | Professor | Enxerga todas as séries |
-| `ADM001` | Administrador | Acesso total + tela de ingestão |
+| `P1042` | Professor | Matemática e Física · 7º ao 9º ano |
+| `ADM001` | Administrador | Acesso total + ingestão, usuários e whitelabel |
 
 Senha de todos: o valor de `SEED_PASSWORD` (padrão `santadoroteia`).
 
@@ -138,8 +146,8 @@ pergunta → planejar → [esclarecer?] → buscar (documentos + agenda) → res
      recupera nada, porque não tem sujeito; vira "prova de história do 7º ano na
      3ª etapa", que recupera. Sem isso, toda pergunta de acompanhamento falha.
    - **Decide se vale perguntar de volta.** O padrão é *não* perguntar: o
-     sistema já sabe série, turma, papel e disciplinas, e perguntar o que já se
-     sabe é atrito. Quando há mais de uma leitura possível, ele escolhe a mais
+     sistema já sabe papel, série e disciplinas, e perguntar o que já se sabe é
+     atrito. Quando há mais de uma leitura possível, ele escolhe a mais
      provável e **declara a suposição** na resposta ("Considerando a 3ª etapa,
      que é a atual: …"), o que deixa a pessoa corrigir sem ter sido interrogada.
      Só quando as leituras levam a respostas incompatíveis é que ele pergunta —
@@ -153,15 +161,20 @@ pergunta → planejar → [esclarecer?] → buscar (documentos + agenda) → res
 
 3. **Responder** — com as citações e, se houver, a suposição declarada.
 
-### Datas vêm da agenda, não do texto
+A conversa **não persiste entre sessões**: cada visita começa do zero. Dentro da
+sessão, os últimos quatro turnos vão como contexto — o suficiente para resolver
+follow-ups, sem deixar a conversa crescer indefinidamente.
 
-Perguntas de "quando" são as mais frequentes e as que o RAG puro responde pior:
-o trecho recuperado costuma ser a tabela inteira do 6º ao 9º ano, e sobra para o
-modelo achar a linha certa e ordenar por data — exatamente o que ele erra.
+### A agenda complementa os documentos, não os substitui
 
-Então `lib/rag/events.ts` consulta a tabela `document_events`, já filtrada por
-série e por vigência, cortando o passado e ordenando por data. O modelo recebe
-uma lista curta e correta em vez de um bloco de texto para interpretar.
+Perguntas de "quando" são as mais frequentes, e `lib/rag/events.ts` monta um
+índice de datas a partir de `document_events`, já filtrado por série e vigência,
+cortando o passado e ordenando no banco.
+
+Mas **os documentos são sempre consultados**, inclusive nas perguntas de data. A
+agenda é um atalho para ordenar e não deixar passar nada; ela pode estar
+incompleta, porque só contém o que a extração pegou e um humano validou. Uma
+data que aparece só no texto do documento vale do mesmo jeito.
 
 Só entram eventos com `review = 'ativo'`. O que a IA extraiu com confiança baixa
 fica em `a_revisar` e **não é apresentado como fato** até alguém conferir.
@@ -215,18 +228,38 @@ navegador.
 
 ### Contexto do usuário
 
-Além do cadastro da secretaria, cada pessoa mantém o próprio contexto em
-**Meu perfil**: disciplinas que leciona, segmentos, séries que acompanha e uma
-observação livre. Tudo isso entra no prompt.
+O contexto é **deliberadamente curto**, e nada nele é editável pela própria
+pessoa:
 
-A separação importante: **contexto ajusta o tom e o foco; nunca o acesso.**
-Um aluno não pode editar a própria série, porque a série é o que recorta quais
-documentos ele enxerga — deixar isso editável seria entregar a chave do cofre.
-A observação livre vai para o prompt rotulada como texto do usuário, para não
-ser lida como instrução do sistema.
+- **Aluno / responsável:** nome e série. Só isso. O acesso ao acervo é recortado
+  pela série, então deixá-la editável pelo próprio usuário seria entregar a
+  chave do cofre.
+- **Professor:** disciplinas e séries em que dá aula (vazio para polivalente do
+  Fundamental I). Não amplia acesso — professor já enxerga todas as séries —,
+  só diz à IA com quem ela fala.
+
+Tudo é mantido em **Administração → Usuários**. A tela **Meu perfil** existe
+para transparência: mostra exatamente o que o assistente sabe, sem nenhum campo
+editável.
+
+A série é gravada junto com o ano letivo em que vale, e a série **vigente** é
+derivada da data (`lib/series-progression.ts`). Quem entrou como 7º ano em 2026
+é tratado como 8º ano em 2027, sem rotina agendada — o banco guarda o fato
+original, que é auditável, e a série atual é uma consequência do calendário.
 
 Como a sessão lê o usuário do banco a cada requisição, uma correção na secretaria
 vale na hora, sem esperar o cookie expirar.
+
+### Data e etapa
+
+O colégio trabalha com três etapas (trimestres). O assistente recebe a data de
+hoje e a etapa vigente (`lib/academic-calendar.ts`), o que resolve "a próxima
+prova" ou "esta etapa" sem precisar perguntar. O prompt é explícito em **não**
+restringir a resposta à etapa atual por conta própria: se um documento de outra
+etapa responde à pergunta, ele deve ser usado, dizendo a que etapa se refere.
+
+As datas de corte das etapas estão em variável de ambiente
+(`ACADEMIC_ETAPA_ENDS`) porque são um palpite — confirme com a secretaria.
 
 ### Vigência
 

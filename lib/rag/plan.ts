@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AI_MODELS, DEMO_MODE, openai } from '@/lib/ai/provider';
 import type { SessionUser } from '@/lib/auth/session';
 import { ROLE_LABELS, serieLabel } from '@/lib/taxonomy';
+import { currentEtapa, todayISO, type Etapa } from '@/lib/academic-calendar';
 
 /**
  * Planejamento da pergunta, antes de buscar.
@@ -47,16 +48,14 @@ const jsonSchema = {
   },
 } as const;
 
-function systemPrompt(user: SessionUser, today: string): string {
+function systemPrompt(user: SessionUser, today: string, etapa: Etapa): string {
   const perfil = [
     `papel: ${ROLE_LABELS[user.role]}`,
     user.serie ? `série: ${serieLabel(user.serie)}` : null,
-    user.turma ? `turma: ${user.turma}` : null,
     user.disciplinas.length ? `leciona: ${user.disciplinas.join(', ')}` : null,
-    user.extraSeries.length
-      ? `acompanha também: ${user.extraSeries.map(serieLabel).join(', ')}`
+    user.seriesTaught.length
+      ? `dá aula para: ${user.seriesTaught.map(serieLabel).join(', ')}`
       : null,
-    user.contextNote ? `observação da própria pessoa: "${user.contextNote}"` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -65,7 +64,7 @@ function systemPrompt(user: SessionUser, today: string): string {
 
 QUEM PERGUNTA
 ${perfil}
-Hoje é ${today}.
+Hoje é ${today}, ${etapa.emAndamento ? `na ${etapa.label} de ${etapa.anoLetivo}` : `fora do período letivo (última referência: ${etapa.label} de ${etapa.anoLetivo})`}.
 
 "searchQuery"
 Reescreva a pergunta como uma consulta autônoma, que faça sentido sem o histórico. Resolva pronomes e elipses usando as mensagens anteriores e o perfil acima. Mantenha os termos que a pessoa usou (o acervo é indexado com as palavras dos documentos) e acrescente o que estava implícito — série, etapa, matéria.
@@ -84,7 +83,7 @@ Só marque true quando as leituras possíveis levarem a respostas INCOMPATÍVEIS
 
 NUNCA pergunte:
 - a série, a turma ou o segmento de quem pergunta — já está no perfil acima;
-- qual etapa, quando "a etapa atual" resolve pela data de hoje;
+- qual etapa, quando a etapa vigente informada acima já resolve;
 - confirmação de algo que a pessoa já disse na conversa;
 - detalhe que mudaria pouco a resposta.
 
@@ -106,14 +105,15 @@ export async function planQuery(input: PlanInput): Promise<QueryPlan> {
 
   if (DEMO_MODE) return fallbackPlan(question);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
+  const etapa = currentEtapa();
 
   try {
     const response = await openai().chat.completions.create({
       model: AI_MODELS.planner,
       temperature: 0,
       messages: [
-        { role: 'system', content: systemPrompt(user, today) },
+        { role: 'system', content: systemPrompt(user, today, etapa) },
         // Só o histórico recente importa para resolver o follow-up, e cada
         // mensagem é truncada para o planejador continuar barato.
         ...history.slice(-4).map((m) => ({

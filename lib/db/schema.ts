@@ -130,24 +130,30 @@ export const users = pgTable(
     role: userRole('role').notNull(),
     passwordHash: text('password_hash').notNull(),
 
-    /** Contexto acadêmico — alimenta tanto o filtro de acesso quanto o prompt da IA. */
+    /*
+     * Contexto acadêmico. Todo ele é mantido pela secretaria — nenhuma destas
+     * colunas é editável pela própria pessoa, porque `serie` e `segment`
+     * recortam quais documentos o aluno enxerga.
+     */
     segment: segment('segment'),
     serie: text('serie'),
     turma: text('turma'),
-    /** Para responsáveis/professores: séries adicionais que a pessoa acompanha. */
+    /**
+     * Ano letivo em que `serie` foi cadastrada. A série vigente é derivada
+     * daqui (ver lib/series-progression.ts), então a virada de ano avança as
+     * turmas sozinha, sem rotina agendada.
+     */
+    serieAnoLetivo: integer('serie_ano_letivo'),
+    /** Séries adicionais que o aluno/responsável acompanha. Amplia o ACESSO. */
     extraSeries: text('extra_series').array().notNull().default(sql`'{}'::text[]`),
 
-    /** Disciplinas que a pessoa leciona. Só afeta o prompt, nunca o acesso. */
-    disciplinas: text('disciplinas').array().notNull().default(sql`'{}'::text[]`),
-    /** Segmentos em que a pessoa dá aula. */
-    segmentsTaught: segment('segments_taught').array().notNull().default(sql`'{}'::segment[]`),
-    /**
-     * Observação livre mantida pela própria pessoa. Entra no prompt para dar
-     * contexto, mas jamais no filtro de acesso — texto livre não pode ampliar
-     * permissão.
+    /*
+     * Contexto do professor. Diz à IA com quem ela fala; não amplia acesso,
+     * porque professor já enxerga todas as séries.
      */
-    contextNote: text('context_note'),
-    contextUpdatedAt: timestamp('context_updated_at', { withTimezone: true }),
+    disciplinas: text('disciplinas').array().notNull().default(sql`'{}'::text[]`),
+    seriesTaught: text('series_taught').array().notNull().default(sql`'{}'::text[]`),
+    segmentsTaught: segment('segments_taught').array().notNull().default(sql`'{}'::segment[]`),
 
     active: boolean('active').notNull().default(true),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
