@@ -214,5 +214,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await sqlClient.end();
+    await sqlClient().end();
   });

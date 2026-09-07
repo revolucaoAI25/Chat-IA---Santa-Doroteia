@@ -210,6 +210,7 @@ duplicado nem tem a senha sobrescrita.
 | Resposta | O que fazer |
 |---|---|
 | `404 Não encontrado` | O `SETUP_TOKEN` não bate, ou a variável não foi salva. Confira na Vercel e **refaça o deploy** — variáveis novas só valem no próximo build. |
+| `DATABASE_URL não está definida` ao abrir o site | A variável não chegou ao ambiente de Production. Confira na Vercel e refaça o deploy. |
 | `As migrações precisam de uma conexão em modo sessão` | Faltou a `DATABASE_URL_DIRECT`, ou ela ficou com a porta 6543. Use o **Session pooler**. |
 | `connect ENETUNREACH` ou trava sem responder | Você usou a **Direct connection**. No plano gratuito ela é IPv6 e a Vercel não alcança. Troque pelo **Session pooler**. |
 | `type "vector" does not exist` | A extensão do passo 1.2 não foi ativada. |
