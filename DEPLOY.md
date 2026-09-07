@@ -43,36 +43,52 @@ que você copia na Parte 1.
 ### 1.3 Copiar os dois endereços de conexão
 
 Clique no botão verde **Connect**, no alto da página (ao lado do nome do
-projeto). Abre uma janela "Connect to your project".
+projeto). Abre a janela "Connect to your project".
 
-Nessa janela, escolha a aba **Direct connection** — não a "Framework", que é a
-que vem selecionada. Ali aparecem três endereços, um abaixo do outro.
+Escolha a aba **Direct Connection string** — a que vem selecionada é a
+"Framework", que é outra coisa.
 
-Você precisa de **dois** deles:
+Aparece um bloco **Connection Method** com três opções em bolinha. Elas não
+aparecem juntas: você **marca uma e a string embaixo muda**. Por isso este
+passo é feito duas vezes.
 
-| Nome na tela | Porta | Como vou chamar |
-|---|---|---|
-| **Transaction pooler** | `6543` | endereço da aplicação |
-| **Session pooler** | `5432` | endereço de instalação |
+> Deixe o campo **Type** como `URI` nas duas vezes.
 
-Copie os dois e, em cada um, troque `[YOUR-PASSWORD]` pela senha do passo 1.1.
+**Primeira vez — o endereço da aplicação:**
 
-> **Ignore o "Direct connection"**, o primeiro da lista. No plano gratuito ele
-> só responde por IPv6, e a Vercel não fala IPv6 — a conexão simplesmente não
-> se estabelece. O **Session pooler** faz o mesmo trabalho (é o modo que
-> permite criar tabelas) e funciona por IPv4.
+1. Marque a bolinha **Transaction pooler**.
+2. Role até **Connection string** e clique no ícone de copiar, à direita.
+3. Guarde como `DATABASE_URL`. Deve terminar em `:6543/postgres`.
 
-> **Por que dois?** O da aplicação aguenta muita gente ao mesmo tempo, mas não
-> serve para criar tabelas. O de instalação faz o contrário. A aplicação usa
-> cada um no seu momento.
+**Segunda vez — o endereço de instalação:**
 
-Os dois endereços de pooler se parecem com isto — repare que mudam **só na
-porta**, e que o usuário tem um ponto no meio (`postgres.abcdefgh`):
+1. Marque a bolinha **Session pooler**.
+2. Copie a string de novo.
+3. Guarde como `DATABASE_URL_DIRECT`. Deve terminar em `:5432/postgres`.
+
+Nos dois, troque `[YOUR-PASSWORD]` pela senha do passo 1.1.
+
+> **Se a senha tiver caractere especial** (`@`, `#`, `/`, `?`, `&`…), ela
+> precisa ser codificada para caber na URL — a própria tela avisa isso. O jeito
+> mais simples de evitar o problema é usar **Reset database password** e gerar
+> uma só com letras e números.
+
+**Não use a opção "Direct connection"**, que é a que vem marcada. A própria
+tela explica por quê: *"Direct connections use IPv6 by default"*, e a Vercel
+não fala IPv6 — a conexão nem se estabelece. É por isso que o Supabase descreve
+o Session pooler como *"alternativa à conexão direta em rede IPv4"*: é
+exatamente o nosso caso.
+
+Conferência rápida: os dois endereços corretos mudam **só na porta**, têm
+`pooler.supabase.com` no host e um ponto no usuário (`postgres.abcdefgh`).
 
 ```
 postgresql://postgres.abcdefgh:SUA_SENHA@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
 postgresql://postgres.abcdefgh:SUA_SENHA@aws-0-sa-east-1.pooler.supabase.com:5432/postgres
 ```
+
+Se o seu ficou com `db.` no começo do host e o usuário sem ponto
+(`postgres:`), você copiou a conexão direta — volte e marque o pooler.
 
 ### 1.4 Criar o bucket dos arquivos
 
